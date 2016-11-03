@@ -3,6 +3,7 @@
 
 
 library(minfi)
+library(ENmix)
 library(GEOquery)
 
 # Read IDAT files
@@ -11,15 +12,10 @@ library(GEOquery)
 # using read.450k.exp() which (in this case) reads all the IDAT files in a directory.
 # is deprecated, using read.metharray.exp instead
 
-setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
-
-rgSet <- read.metharray.exp("all_for_R")
-rgSet
-
-
 
 
 head(sampleNames(rgSet))
+
 
 # we see the samples are named following a standard IDAT naming convention with a 10 digit 
 # number which is an array identifier followed by an identifier of the form R01C01.
