@@ -1,13 +1,21 @@
 # Methylation QC pipeline (quick)
 
 
-
+library(RColorBrewer)
 library(minfi)
 library(ENmix)
 library(GEOquery)
 
 # Read IDAT files
 #Currently minfi does not support reading compressed IDAT files. 
+setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
+
+
+rgSet <- read.metharray.exp("all_for_R")
+
+rgSet
+
+
 
 # using read.450k.exp() which (in this case) reads all the IDAT files in a directory.
 # is deprecated, using read.metharray.exp instead
@@ -15,6 +23,9 @@ library(GEOquery)
 
 
 head(sampleNames(rgSet))
+
+
+
 
 
 # we see the samples are named following a standard IDAT naming convention with a 10 digit 
@@ -34,7 +45,7 @@ pheno=read.csv2(file="/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methyla
 
 pD <- pheno[,c(1,10)]
 
-# Ask Nicola about this and fix
+
 # add stage column
 
 stage= c("iPSC","iPSC","iPSC","DE","DE","DE","PGT","PGT","PGT","PFG","PFG","PFG","PE","PE","PE","EP","EN6","EN6","EN6","EN7","EN7","124I","141 (14-19)","177","179","182","184","124R","136","137","138","139")
@@ -46,13 +57,159 @@ pD=cbind(pD,stage,sample)
 
 pD$Sample_Name=gsub( "^.*?_", "", pD$Sample_Name)
 rownames(pD) <- pD$Sample_Name
-pD <- pD[sampleNames(rgSet),] # reordering before merging
+
+rgSet <- rgSet[,pD$Sample_Name] # reordering before merging
+
 
 
 pData(rgSet) <- pD  # merging into pheno data of rgSet
 
 rgSet
 
+# give more descriptive names to our samples:
+
+pD$simple_id=paste(pD$stage,pD$sample,sep="-")
+sampleNames(rgSet) <- pD$simple_id
+
+# see probe info in table?
+pinfo=pData(rgSet)
+
+# plotCtrl(rgSet)   # to plot QC of probes
+
+
+
+#########trying ENmix tutorial############
+
+
+mraw <- preprocessRaw(rgSet) #  A MethylSet object contains only the methylated and unmethylated signals. 
+
+#This function matches up the different probes and color channels. Note that the dimension of this object is much smaller than for 
+# the RGChannelSet; this is because CpGs measured by type I probes are measured by 2 probes.
+
+# The accessors getMeth and getUnmeth can be used to get the methylated and unmethylated intensities matrices:
+
+
+head(getMeth(mraw)[,1:3])
+
+head(getUnmeth(mraw)[,1:3])
+
+##########modifying multifreqpoly###########
+bincount <- function(x,breaks)
+{
+  x <- x[!is.na(x)]
+  bc <- table(.bincode(x, breaks, TRUE, TRUE))
+  temp=data.frame(id=c(1: (length(breaks)-1)))
+  bc=data.frame(id=as.numeric(names(bc)),counts=as.numeric(bc))
+  resu=merge(temp,bc,by="id",all.x=TRUE)
+  resu$counts[is.na(resu$counts)]=0
+  resu$counts[order(resu$id)]
+}
+
+multifreqpoly <- function(mat, nbreaks=100, col=1:ncol(mat), xlab="", 
+                          ylab="Frequency", legend = list(x = "topright", fill=col,inset=c(-0.2,0),cex=0.6,
+                                                          legend = if(is.null(colnames(mat))) paste(1:ncol(mat)) else 
+                                                            colnames(mat)),...)
+{
+  if(!is.matrix(mat)) stop("Warning: input data is not a numeric matrix\n")
+  if(is.null(col)) col="black"
+  col=rep(col,ceiling(ncol(mat)/length(col)))
+  if(nbreaks > nrow(mat)) nbreaks=min(15,round(nrow(mat)/2))
+  
+  breaks <- seq(min(mat,na.rm=TRUE), max(mat,na.rm=TRUE), 
+                diff(range(mat,na.rm=TRUE))/nbreaks)
+  mids <- 0.5 * (breaks[-1] + breaks[-length(breaks)])
+  counts <- sapply(data.frame(mat),bincount,breaks=breaks)
+  plot(range(mids),c(0,max(counts)),type="n",xlab=xlab,ylab=ylab,...)
+  for(i in 1:ncol(counts)){lines(mids,counts[,i],col=col[i],...)}
+  if(is.list(legend)) do.call(graphics::legend, legend)
+}
+#####################
+
+#total intensity plot is userful for data quality inspection
+#and identification of outlier samples
+
+par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
+ multifreqpoly(assayData(mraw)$Meth+assayData(mraw)$Unmeth,xlab="Total intensity")
+ 
+ #Compare frequency polygon plot and density plot
+beta<-getBeta(mraw, "Illumina")
+ anno=getAnnotation(rgSet)   # get the EPIC Annotation data
+
+ 
+ beta1=beta[anno$Type=="I",]
+ beta2=beta[anno$Type=="II",]
+library(geneplotter)
+ 
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/dist.jpg",height=900,width=600)
+par(mfrow=c(3,1),mar=c(1, 1, 1, 5), xpd=TRUE)
+#multidensity(beta,main="Multidensity")
+multifreqpoly(beta,main="Multifreqpoly",xlab="Beta value")
+#multidensity(beta1,main="Multidensity: Infinium I")
+multifreqpoly(beta1,main="Multifreqpoly: Infinium I",xlab="Beta value")
+#multidensity(beta2,main="Multidensity: Infinium II")
+multifreqpoly(beta2,main="Multifreqpoly: Infinium II",xlab="Beta value")
+ 
+dev.off()
+# 
+#  Data quality measures, including detection P values, number of beads for each methylation read
+#  and average intensities for bisulfite conversion probes can be extracted using the function QCinfo
+#  from an object of RGChannelSetExtended. According default or user specified quality score
+#  thresholds, the QCinfo can also identify and export a list of low quality samples and CpG probes.
+#  Outlier samples in total intensity or beta value distribution were often excluded before further
+#  analysis. Such samples were tricky to be identified, by default the argument outlier=TRUE will
+#  trigger the function to identify these outlier samples automatically. Quality score figures from
+#  QCinfo can be used to guide the selection of quality score thresholds. Low quality samples and
+#  probes can be filtered out using QCfilter or preprocessENmix.
+
+ qc<-QCinfo(rgSet)
+ #exclude before backgroud correction
+mdat<-preprocessENmix(rgSet, bgParaEst="oob", dyeCorr=TRUE, QCinfo=qc, nCores=6)
+#Or exclude after background correction
+mdat <- QCfilter(mdat,qcinfo=qc,outlier=TRUE)
+
+
+
+
+
+
+
+
+# detection p-vals Maksimovic paper
+
+detP <- detectionP(rgSet)
+head(detP)
+dim(detP)
+
+# % of probes in total and for each sample that have a detection p-value above 0.01:
+failed <- detP>0.01
+colMeans(failed)*100 # % of failed positions per sample
+sum(rowMeans(failed)>0.5) # How many positions failed in >50% of samples?
+
+
+pal <- brewer.pal(5,"Dark2")
+
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mean_detection_pvals.jpg",height=700,width=700)
+par(oma=c(2, 2, 2, 2))
+barplot(colMeans(detP),col=pal[as.factor(pD$sample)],las=2, cex.names=0.9,ylim = c(0,0.0003))
+mtext(side = 2, text = "Mean detection p-values", line = 4.5, cex=1.5)
+abline(h=0.01,col="red") 
+legend("topleft", legend=levels(as.factor(pD$sample)),fill=pal, bg="white")
+dev.off()
+
+# remove poor quality samples
+
+keep <- colMeans(detP) <0.01
+rgSet = rgSet[,keep]
+rgSet  # no samples lost 03/11/2016
+
+# remove from detection p-val table:
+detP <- detP[,keep]
+dim(detP) # no samples lost 03/11/2016
+
+
+
+
+########################################## OK up to here, check QC below
 
 # The RGChannelSet stores also a manifest object that contains the probe design information of the array:
 
@@ -61,20 +218,8 @@ manifest
 
 head(getProbeInfo(manifest))
 
-#  A MethylSet objects contains only the methylated and unmethylated signals. You create this by
 
-MSet <- preprocessRaw(rgSet) 
-MSet
-
-
-# This function matches up the different probes and color channels. Note that the dimension of this object is much smaller than for 
-# the RGChannelSet; this is because CpGs measured by type I probes are measured by 2 probes.
-
-# The accessors getMeth and getUnmeth can be used to get the methylated and unmethylated intensities matrices:
-
-head(getMeth(MSet)[,1:3])
-
-head(getUnmeth(MSet)[,1:3])
+#
 
 #  A RatioSet object is a class designed to store Beta values and/or M values instead of the methylated and unmethylated signals. 
 # An optional copy number matrix, CN, the sum of the methylated and unmethylated signals, can be also stored. Mapping a MethylSet 
@@ -136,14 +281,15 @@ names(annotation)
 
 # The accessors getMeth and getUnmeth can be used to get the methylated and unmethylated intensities matrices:
 
-head(getMeth(MSet)[,1:3])
-head(getUnmeth(MSet)[,1:3])
+head(getMeth(mraw)[,1:3])
+head(getUnmeth(mraw)[,1:3])
 
 # The functions getQC and plotQC are designed to extract and plot the quality control information from the MethylSet:
 
-qc <- getQC(MSet)
+qc <- getQC(mraw)
 head(qc)
 
+par(mfrow=c(1,1)) 
 plotQC(qc)
 
 # Moreover, the function addQC applied to the MethylSet will add the QC information to the phenotype data.
@@ -151,11 +297,11 @@ plotQC(qc)
 # To further explore the quality of the samples, it is useful to look at the Beta value densities of the samples, with the option to color 
 # the densities by sampleID
 
-densityPlot(MSet, sampGroups = pD$sample)
+densityPlot(mraw, sampGroups = pD$sample)
 
 # or density bean plots:
 
-densityBeanPlot(MSet, sampGroups = pD$sample)
+densityBeanPlot(mraw, sampGroups = pD$sample)
 
 
 
@@ -171,4 +317,141 @@ controlStripPlot(rgSet, controls="BISULFITE CONVERSION II")
 
 
 qcReport(rgSet, pdf= "qcReport.pdf")   # it's not plotting properly
+
+
+############################################ normalization
+
+# The function preprocessQuantile implements stratified quantile normalization preprocessing for Illumina methylation microarrays. 
+# Probes are stratified by region (CpG island, shore, etc.).
+
+
+# normalize the data; this results in a GenomicRatioSet object 
+mSetSq <- preprocessQuantile(rgSet)
+
+# create a MethylSet object from the raw data for plotting 
+mSetRaw <- preprocessRaw(rgSet)
+
+# visualise what the data looks like before and after normalisation 
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/before_after_normalization.jpg",height=700,width=1400)
+par(mfrow=c(1,2)) 
+densityPlot(rgSet, sampGroups=pD$sample,main="Raw", legend=FALSE) 
+legend("top", legend = levels(as.factor(pD$sample)), text.col=brewer.pal(8,"Dark2"))
+
+densityPlot(getBeta(mSetSq), sampGroups=pD$sample, main="Normalized", legend=FALSE)
+legend("top", legend = levels(as.factor(pD$sample)), text.col=brewer.pal(8,"Dark2"))
+
+dev.off()
+
+
+# MDS plots
+library(limma)
+colours37 = c("#466791","#60bf37","#953ada","#4fbe6c","#ce49d3","#a7b43d","#5a51dc","#d49f36","#552095",
+             "#507f2d","#db37aa","#84b67c","#a06fda","#df462a","#5b83db","#c76c2d","#4f49a3","#82702d",
+             "#dd6bbb","#334c22","#d83979","#55baad","#dc4555","#62aad3","#8c3025","#417d61","#862977",
+             "#bba672","#403367","#da8a6d","#a79cd4","#71482c","#c689d0","#6b2940","#d593a7","#895c8b",
+             "#bd5975") # larger selection of colours
+
+pal <- brewer.pal(5,"Dark2")
+
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_common_samples_stages.jpg",height=700,width=1400)
+par(mfrow=c(1,2))
+
+plotMDS(getM(mSetSq), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)])
+legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
+
+
+plotMDS(getM(mSetSq), top=1000, gene.selection="common", col=pal[as.factor(pD$sample)])
+legend("topright", legend=levels(as.factor(pD$sample)), text.col=pal, bg="white", cex=0.7)
+dev.off()
+
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_pairwise_samples_stages.jpg",height=700,width=1400)
+par(mfrow=c(1,2))
+
+plotMDS(getM(mSetSq), top=1000, gene.selection="pairwise", col=colours37[as.factor(pD$stage)])
+legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
+
+
+plotMDS(getM(mSetSq), top=1000, gene.selection="pairwise", col=pal[as.factor(pD$sample)])
+legend("topright", legend=levels(as.factor(pD$sample)), text.col=pal, bg="white", cex=0.7)
+dev.off()
+
+# Examine higher dimensions to look at other sources of variation 
+
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_common_samples_stages_secondaryPCs.jpg",height=700,width=2100)
+par(mfrow=c(1,3)) 
+
+plotMDS(getM(mSetSq), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)], dim=c(1,3))
+legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, cex=0.7, bg="white")
+
+plotMDS(getM(mSetSq), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)], dim=c(2,3))
+legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, cex=0.7, bg="white")
+
+plotMDS(getM(mSetSq), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)], dim=c(3,4))
+legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, cex=0.7, bg="white")
+
+dev.off()
+
+# # Violin Plots of methylation levels across the whole genome
+# library(vioplot)
+# vioplots_samples <- data.frame()
+# 
+# for(s in colnames(rgSet)){
+#   
+#   vioplots_samples[,s] = rgSet[,s]
+#   
+#   
+# }
+# vioplot(rgSet, names=pD$simple_id, col="gold")
+# title("Violin Plots of methylation levels across the whole genome")
+
+
+############ Filtering
+
+#Poor performing probes are generally filtered out prior to differential methylation analysis. 
+# As the signal from these probes is unreliable, by removing them we perform fewer statistical 
+# tests and thus incur a reduced multiple testing penalty. We filter out probes that have failed 
+# in one or more samples based on detection p-value.
+
+# ensure probes are in the same order in the mSetSq and detP objects 
+detP <- detP[match(featureNames(mSetSq),rownames(detP)),]
+# remove any probes that have failed in one or more samples 
+keep <- rowSums(detP < 0.01) == ncol(mSetSq) 
+table(keep)
+mean(!keep)*100 # % of failed probes in one or more samples
+
+mSetSqFlt <- mSetSq[keep,] 
+mSetSqFlt # lost 4548 probes (0.5%)
+
+# remove probes from sex chromosomes
+
+# if your data includes males and females, remove probes on the sex chromosomes 
+keep <- !(featureNames(mSetSqFlt) %in% anno$Name[anno$chr %in% c("chrX","chrY")])
+table(keep) 
+mSetSqFlt <- mSetSqFlt[keep,] # lost 19077 probes (2.2%)
+
+# removal of probes where common SNPs may affect the CpG. You can either remove all probes 
+# affected by SNPs (default), or only those with minor allele frequencies greater than a 
+# specified value.
+
+# remove probes with SNPs at CpG site 
+test= getSnpInfo(mSetSqFlt, snpAnno = NULL)
+
+mSetSqFlt <- dropLociWithSnps(mSetSqFlt,snpAnno = NULL) # is this using the annotation from the object?
+
+mSetSqFlt # lost 28453 probes (3.4%)
+
+######test
+source("/Users/Marta/Documents/WTCHG/R\ scripts/methylation\ from\ matthias/qnorm_function.R")
+library(preprocessCore)
+`%notin%` <- function(x,y) !(x %in% y)
+
+b_norm=QNorm(rgSet)
+
+
+
+
+
+
+##########end of test
+
 
