@@ -71,6 +71,15 @@ sampleNames(rgSet) <- pD$simple_id
 
 #########trying ENmix tutorial############
 
+############ probes QC  ####################
+
+plotCtrl(rgSet)  # generates all probes plots. Check with Illumina manual to detect anormalities.
+
+
+
+# transform to methylset
+
+
 
 mraw <- preprocessRaw(rgSet) #  A MethylSet object contains only the methylated and unmethylated signals. 
 
