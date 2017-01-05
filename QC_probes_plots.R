@@ -175,7 +175,7 @@ plotCtrl <- function(rgSet,IDorder=NULL)
     {
       par(mar=c(5, 4, 4, 8.2))
       idx <- t(replicate(nrow(red),1:ncol(red)))
-      if(ctype="STAINING"){ # fixed so that DNP(20k) and Biotin(5k) - ignored by illumina EPIC table - don't appear
+      if(ctype=="STAINING"){ # fixed so that DNP(20k) and Biotin(5k) - ignored by illumina EPIC table - don't appear
         plot(idx,grn,col=as.vector(cc$Color),ylim=c(0,ymax),main=paste(ctype,
                                                                        " Green",sep=""),bty="o",xlab="Sample",ylab="Intensity",cex.lab=1.2)
         legend(x=ncol(grn)*1.05,y=ymax*0.8,xjust = 0,yjust=0.5, bty="o",legend=
