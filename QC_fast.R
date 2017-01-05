@@ -565,61 +565,111 @@ mSetSqFlt <- dropLociWithSnps(mSetSqFlt,snpAnno = NULL) # is this using the anno
 
 mSetSqFlt # lost 28453 probes (3.4%)
 
+
+
+
 ######test
+
+
+###### our pipeline – QN (quantile normalization?) in 6 categories
+
+
+library(minfi)
+library(ENmix)
+
+setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
+
+rgSet <- read.metharray.exp("all_for_R") # Reads an entire methylation array experiment 
+
+rgSet
+
+
+pheno=read.csv2(file="/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/3.Results/Phenotype.csv")
+pD <- pheno[,c(1,10)] # we keep sample name in the experiment and the corresponding stages and samples
+
+# add stage column
+stage= c("iPSC","iPSC","iPSC","DE","DE","DE","PGT","PGT","PGT","PFG","PFG","PFG","PE","PE","PE","EP","EN6","EN6","EN6","EN7","EN7","124I","141 (14-19)","177","179","182","184","124R","136","137","138","139")
+# add sample column
+sample=c("neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd3.1","ISL","ISL","ISL","ISL","ISL","ISL","R","R","R","R","R")
+
+# some samples are missing
+
+pD=cbind(pD,stage,sample)
+pD$Sample_Name=gsub( "^.*?_", "", pD$Sample_Name) # take out stage part of experiment id
+rownames(pD) <- pD$Sample_Name # add that as rownames
+rgSet <- rgSet[,pD$Sample_Name] # reordering before merging
+pData(rgSet) <- pD  # merging into pheno data of rgSet
+
+# give more descriptive names to our samples:
+pD$simple_id=paste(pD$stage,pD$sample,sep="-")
+sampleNames(rgSet) <- pD$simple_id
+
+
+
+# QN function 
+
+
 source("/Users/Marta/Documents/WTCHG/R\ scripts/methylation\ from\ matthias/qnorm_function.R")
 library(preprocessCore)
 `%notin%` <- function(x,y) !(x %in% y)
 
+
+
 ##get detection p-values:
 
-dp <<- detectionP(RGset, type = "m+u")
-
-
-
-
-
-###### our pipeline – QN in 6 categories
+dp <<- detectionP(rgSet, type = "m+u")
 
 ## Type II probes
-TypeII.Name <- getProbeInfo(RGset, type = "II")$Name
-TypeII.Green <- getGreen(RGset)[getProbeInfo(RGset, type = "II")$Address,]
-TypeII.Red <- getRed(RGset)[getProbeInfo(RGset, type = "II")$Address,]
+TypeII.Name <- getProbeInfo(rgSet, type = "II")$Name
+TypeII.Green <- getGreen(rgSet)[getProbeInfo(rgSet, type = "II")$Address,]
+TypeII.Red <- getRed(rgSet)[getProbeInfo(rgSet, type = "II")$Address,]
 rownames(TypeII.Red) <- TypeII.Name
-colnames(TypeII.Red) <- sampleNames(RGset)
+colnames(TypeII.Red) <- sampleNames(rgSet)
 rownames(TypeII.Green) <- TypeII.Name
-colnames(TypeII.Green) <- sampleNames(RGset)
+colnames(TypeII.Green) <- sampleNames(rgSet)
 
 
 
 ## Type I probes, split into green and red channels
-TypeI.Green.Name <- getProbeInfo(RGset, type = "I-Green")$Name
-TypeI.Green.M <- getGreen(RGset)[getProbeInfo(RGset, type = "I-Green")$AddressB,]
+TypeI.Green.Name <- getProbeInfo(rgSet, type = "I-Green")$Name
+TypeI.Green.M <- getGreen(rgSet)[getProbeInfo(rgSet, type = "I-Green")$AddressB,] # address for methylated signal=B
 rownames(TypeI.Green.M) <- TypeI.Green.Name
-colnames(TypeI.Green.M) <- sampleNames(RGset)
-TypeI.Green.U <- getGreen(RGset)[getProbeInfo(RGset, type = "I-Green")$AddressA,]
+colnames(TypeI.Green.M) <- sampleNames(rgSet)
+TypeI.Green.U <- getGreen(rgSet)[getProbeInfo(rgSet, type = "I-Green")$AddressA,] # address for unmethylated signal=A. How does he know?
 rownames(TypeI.Green.U) <- TypeI.Green.Name
-colnames(TypeI.Green.U) <- sampleNames(RGset)
+colnames(TypeI.Green.U) <- sampleNames(rgSet)
 
-TypeI.Red.Name <- getProbeInfo(RGset, type = "I-Red")$Name
-TypeI.Red.M <- getRed(RGset)[getProbeInfo(RGset, type = "I-Red")$AddressB,]
+TypeI.Red.Name <- getProbeInfo(rgSet, type = "I-Red")$Name
+TypeI.Red.M <- getRed(rgSet)[getProbeInfo(rgSet, type = "I-Red")$AddressB,]
 rownames(TypeI.Red.M) <- TypeI.Red.Name
-colnames(TypeI.Red.M) <- sampleNames(RGset)
-TypeI.Red.U <- getRed(RGset)[getProbeInfo(RGset, type = "I-Red")$AddressA,]
+colnames(TypeI.Red.M) <- sampleNames(rgSet)
+TypeI.Red.U <- getRed(rgSet)[getProbeInfo(rgSet, type = "I-Red")$AddressA,]
 rownames(TypeI.Red.U) <- TypeI.Red.Name
-colnames(TypeI.Red.U) <- sampleNames(RGset)
+colnames(TypeI.Red.U) <- sampleNames(rgSet)
 
-##remove high missingness samples
-d = ifelse(dp<0.1,1,NA)
-cr = data.frame(rowSums(is.na(d))/length(d[1,]))
+##remove high missingness probes
+d = ifelse(dp<0.1,1,NA) # if p-value <0.1, make it 1. Else, make it NA.
+cr = data.frame(rowSums(is.na(d))/length(d[1,])) # sums NAs in each row, then divide by nº of samples.
+  # In the end, it excludes probes with p-values above 1 in a min of 1 sample. Why the formula, then?
 exclude.badcalls = rownames(cbind(cr,rownames(cr))[cbind(cr,rownames(cr))[,1]>0.02,])
 
-exclude.sites = exclude.badcalls
+# test=names(as.matrix(cr)[which(as.matrix(cr)[,1]>0.02),])  # does the same as exclude.badcalls
+
+
+
+exclude.sites = exclude.badcalls  # what should I do with these? 3049 failed probes
+
 ##exclude.sites = unique(rbind(as.matrix(exclude.chrX), as.matrix(exclude.chrY),as.matrix(exclude.cas),as.matrix(exclude.snps),as.matrix(crossmap),as.matrix(exclude.badcalls), as.matrix(exclude.mhc)))
 
-mind = data.frame(colSums(is.na(d))/length(d[,1]))
-remove.mind = rownames(cbind(mind,rownames(mind))[cbind(mind,rownames(mind))[,1]>0.02,])
-samples = rownames(cbind(mind,rownames(mind))[cbind(mind,rownames(mind))[,1]<0.1,])
-#samples=pData(RGset)$Sample_Name
+##remove high missingness samples 
+
+mind = data.frame(colSums(is.na(d))/length(d[,1])) # sums NAs in each column, and divides by nº of probes
+remove.mind = rownames(cbind(mind,rownames(mind))[cbind(mind,rownames(mind))[,1]>0.02,])  # remove samples with over 2% failed probes
+# test2=names(as.matrix(mind)[which(as.matrix(mind)[,1]>0.02),])  # does the same as remove.mind
+# no failed samples
+
+samples = rownames(cbind(mind,rownames(mind))[cbind(mind,rownames(mind))[,1]<0.1,])  # samples with less than 10% failed probes. Why this step?
+#samples=pData(rgSet)$Sample_Name
 
 TypeII.Green =subset(TypeII.Green, select=samples)
 TypeII.Red = subset(TypeII.Red, select=samples)
@@ -627,30 +677,61 @@ TypeI.Green.M = subset(TypeI.Green.M, select=samples)
 TypeI.Green.U = subset(TypeI.Green.U, select=samples)
 TypeI.Red.M = subset(TypeI.Red.M, select=samples)
 TypeI.Red.U = subset(TypeI.Red.U, select=samples)
+  # Everything stays the same.
 
 ##set NAs
-d = subset(dp, select = samples)
-TypeII.Green = TypeII.Green * ifelse(d[rownames(TypeII.Green),]==0,1,NA)
+d = subset(dp, select = samples) # no failed samples
+TypeII.Green = TypeII.Green * ifelse(d[rownames(TypeII.Green),]==0,1,NA) # by multiplication, set probes and samples with high p-values to NA
 TypeII.Red = TypeII.Red * ifelse(d[rownames(TypeII.Red),]==0,1,NA)
 TypeI.Green.M = TypeI.Green.M * ifelse(d[rownames(TypeI.Green.M),]==0,1,NA)
 TypeI.Green.U = TypeI.Green.U * ifelse(d[rownames(TypeI.Green.U),]==0,1,NA)
 TypeI.Red.M = TypeI.Red.M * ifelse(d[rownames(TypeI.Red.M),]==0,1,NA)
 TypeI.Red.U = TypeI.Red.U * ifelse(d[rownames(TypeI.Red.U),]==0,1,NA)
+  # why this step?
 
 #--------------------------------------------------------------------------------------------------------------------------------
 ##calculate betas - no QN
-TypeII.betas = TypeII.Green/(TypeII.Red+TypeII.Green+100)
-TypeI.Green.betas = TypeI.Green.M/(TypeI.Green.M+TypeI.Green.U+100)
-TypeI.Red.betas = TypeI.Red.M/(TypeI.Red.M+TypeI.Red.U+100)
-beta.noQN=rbind(TypeII.betas,TypeI.Green.betas,TypeI.Red.betas)
-colnames(beta.noQN)<-gsub("^X","",colnames(beta.noQN))
+TypeII.betas = TypeII.Green/(TypeII.Red+TypeII.Green+100)  # beta = methylated (green in type II) / meth (green) + unmeth (red) + 100
+TypeI.Green.betas = TypeI.Green.M/(TypeI.Green.M+TypeI.Green.U+100) # here (type I probe)  meth and unmeth have same color
+TypeI.Red.betas = TypeI.Red.M/(TypeI.Red.M+TypeI.Red.U+100) # same
+beta.noQN=rbind(TypeII.betas,TypeI.Green.betas,TypeI.Red.betas)  # unifying the 3 matrices, I get as a sum the total number of probes
+# colnames(beta.noQN)<-gsub("^X","",colnames(beta.noQN)) # Once I rename the sample, this is useless
+
+
+
+# plot beta values and see how they change from previous plots
+
+
+library(geneplotter)
+
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_Matthias_pipeline_noQN.jpg",height=900,width=600)
+
+par(mfrow=c(3,1),mar=c(5, 5, 2, 5), xpd=TRUE)
+
+multifreqpoly(beta.noQN,main="All probes",xlab="Beta value",legend=F)
+# legend("topright", legend = as.factor(pD$sample),fill=as.factor(pD$sample),inset=c(-0.07,0)) # colouring error
+
+
+multifreqpoly(rbind(TypeI.Red.betas,TypeI.Green.betas),main="Multifreqpoly: Infinium I",xlab="Beta value",legend=F)
+
+multifreqpoly(TypeII.betas,main="Multifreqpoly: Infinium II",xlab="Beta value",legend=F)
+
+dev.off()
+
+  # my previous results and Matthias' are exactly the same
+
+
+
 beta.noQN=as.matrix(beta.noQN)
 ##save(beta.noQN, file="beta_noQN.RData")
 ##rm(beta.noQN, TypeII.betas,TypeI.Green.betas,TypeI.Red.betas)
 
-##QN
 
-#exclude sites
+
+
+#############QN (quantile normalization)
+
+#exclude sites (filtering out failed probes)
 TypeII.Green = TypeII.Green[rownames(TypeII.Green) %notin% as.matrix(exclude.sites),]
 TypeII.Red = TypeII.Red[rownames(TypeII.Red) %notin% as.matrix(exclude.sites),]
 TypeI.Green.M = TypeI.Green.M[rownames(TypeI.Green.M) %notin% as.matrix(exclude.sites),]
@@ -658,6 +739,7 @@ TypeI.Green.U = TypeI.Green.U[rownames(TypeI.Green.U) %notin% as.matrix(exclude.
 TypeI.Red.M = TypeI.Red.M[rownames(TypeI.Red.M) %notin% as.matrix(exclude.sites),]
 TypeI.Red.U = TypeI.Red.U[rownames(TypeI.Red.U) %notin% as.matrix(exclude.sites),]
 
+# normalizing using quantiles
 
 TypeII.Red.norm=normalize.quantiles(TypeII.Red)
 TypeII.Green.norm=normalize.quantiles(TypeII.Green)
@@ -669,11 +751,54 @@ TypeI.Red.U.norm=normalize.quantiles(TypeI.Red.U)
 
 #calculate betas
 TypeII.betas = TypeII.Green.norm/(TypeII.Red.norm+TypeII.Green.norm+100)
+rownames(TypeII.betas)=rownames(TypeII.Green)
+colnames(TypeII.betas)=colnames(TypeII.Green)
 TypeI.Green.betas = TypeI.Green.M.norm/(TypeI.Green.M.norm+TypeI.Green.U.norm+100)
+rownames(TypeI.Green.betas)=rownames(TypeI.Green.M)
+colnames(TypeI.Green.betas)=colnames(TypeI.Green.M)
 TypeI.Red.betas = TypeI.Red.M.norm/(TypeI.Red.M.norm+TypeI.Red.U.norm+100)
+rownames(TypeI.Red.betas)=rownames(TypeI.Red.M)
+colnames(TypeI.Red.betas)=colnames(TypeI.Red.M)
+
 beta=rbind(TypeII.betas,TypeI.Green.betas,TypeI.Red.betas)
-colnames(beta)<-gsub("^X","",colnames(beta))
-row.names(beta)=c(row.names(TypeII.Green), row.names(TypeI.Green.M), row.names(TypeI.Red.M))#
+# colnames(beta)<-gsub("^X","",colnames(beta))
+
+  # has 3049 less probes than the unnormalized version
+
+
+
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_Matthias_pipeline_filtered_and_QN.jpg",height=900,width=600)
+
+par(mfrow=c(3,1),mar=c(5, 5, 2, 5), xpd=TRUE)
+
+multifreqpoly(beta,main="All probes",xlab="Beta value",legend=F)
+# legend("topright", legend = as.factor(pD$sample),fill=as.factor(pD$sample),inset=c(-0.07,0)) # colouring error
+
+
+multifreqpoly(rbind(TypeI.Red.betas,TypeI.Green.betas),main="Multifreqpoly: Infinium I",xlab="Beta value",legend=F)
+
+multifreqpoly(TypeII.betas,main="Multifreqpoly: Infinium II",xlab="Beta value",legend=F)
+
+dev.off()
+
+# most changes in type II probe distribution (in abs value). Also in type I.
+
+# before and after filtering and normalization:
+
+
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_Matthias_pipeline_comparison_un-normalized.jpg",height=900,width=600)
+
+par(mfrow=c(2,1),mar=c(5, 5, 2, 5), xpd=TRUE)
+
+multifreqpoly(beta.noQN,main="Before filtering and QN",xlab="Beta value",legend=F)
+
+multifreqpoly(beta,main="After",xlab="Beta value",legend=F)
+
+
+dev.off()
+
+
+
 beta <- as.matrix(beta)
 
 
