@@ -5,15 +5,14 @@ library(RColorBrewer)
 library(minfi)
 library(ENmix)
 library(GEOquery)
+library(wateRmelon) # for BMIQ normalization
 
 `%notin%` <- function(x,y) !(x %in% y)
 
 # Read IDAT files
-#Currently minfi does not support reading compressed IDAT files. 
 setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
-
+#read cross-reactive probes
 cross_reactive_EPIC <- read.csv("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/cross-reactive_probes_Pidsley_2016/EPIC_cross_reactive_probes.csv",sep=";")
-
 rgSet <- read.metharray.exp("all_for_R") # Reads an entire methylation array experiment 
 
 rgSet
@@ -22,47 +21,23 @@ rgSet
   # array: IlluminaHumanMethylationEPIC
   # annotation: ilm10b2.hg19
 
-
-head(sampleNames(rgSet))
-
-
-# we see the samples are named following a standard IDAT naming convention with a 10 digit 
-# number which is an array identifier followed by an identifier of the form R01C01.
-
-# The 200526570053_R01C01 means row 1 and column 1 on chip 200526570053. 
-
-
-# We now get the standard GEO representation to get the phenotype data stored in GEO. 
-# Most of the columns in this phenotype data are irrelevant (contains data such as the 
-# address of the person who submitted the data); we keep the useful ones.
-
-# Then we clean it.
+head(sampleNames(rgSet)) # we see the samples are named following a standard IDAT naming convention with a 10 digit number
 
 pheno=read.csv2(file="/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/3.Results/Phenotype.csv")
-
 pD <- pheno[,c(1,10)] # we keep sample name in the experiment and the corresponding stages and samples
 
-
 # add stage column
-
 stage= c("iPSC","iPSC","iPSC","DE","DE","DE","PGT","PGT","PGT","PFG","PFG","PFG","PE","PE","PE","EP","EN6","EN6","EN6","EN7","EN7","124I","141 (14-19)","177","179","182","184","124R","136","137","138","139")
 # add sample column
 sample=c("neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd3.1","ISL","ISL","ISL","ISL","ISL","ISL","R","R","R","R","R")
 
-  # some samples are missing
-
+# some samples are missing
 pD=cbind(pD,stage,sample)
-
 
 pD$Sample_Name=gsub( "^.*?_", "", pD$Sample_Name) # take out stage part of experiment id
 rownames(pD) <- pD$Sample_Name # add that as rownames
-
 rgSet <- rgSet[,pD$Sample_Name] # reordering before merging
-
-
-
 pData(rgSet) <- pD  # merging into pheno data of rgSet
-
 rgSet
 
 # give more descriptive names to our samples:
@@ -71,30 +46,12 @@ pD$simple_id=paste(pD$stage,pD$sample,sep="-")
 sampleNames(rgSet) <- pD$simple_id
 
 
-
-#########trying ENmix tutorial############
-
 ############ probes QC  ####################
-
-# plotCtrl(rgSet)  # generates all probes plots. Check with Illumina manual to detect anormalities.
-
-
 
 # transform to methylset
 
-
-
 mraw <- preprocessRaw(rgSet) #  A MethylSet object contains only the methylated and unmethylated signals. 
 
-#This function matches up the different probes and color channels. Note that the dimension of this object is much smaller than for 
-# the RGChannelSet; this is because CpGs measured by type I probes are measured by 2 probes.
-
-# The accessors getMeth and getUnmeth can be used to get the methylated and unmethylated intensities matrices:
-
-
-head(getMeth(mraw)[,1:3])
-
-head(getUnmeth(mraw)[,1:3])
 
 ##########modifying multifreqpoly###########
 
@@ -131,502 +88,96 @@ multifreqpoly <- function(mat, nbreaks=100, col=1:ncol(mat), xlab="",
 #total intensity plot is userful for data quality inspection
 #and identification of outlier samples
 
-par(mar=c(5.1, 4.1, 4.1, 8.1), xpd=TRUE)
+par(mar=c(5.1, 4.1, 1.1, 3.1), xpd=TRUE)
  
-multifreqpoly(assayData(mraw)$Meth+assayData(mraw)$Unmeth,xlab="Total intensity")
- 
- #frequency plots of beta values
-
- beta<-getBeta(mraw, "Illumina")
- anno=getAnnotation(rgSet)   # get the EPIC Annotation data
-
- 
- beta1=beta[anno$Type=="I",]
- beta2=beta[anno$Type=="II",]
-
-
-library(geneplotter)
- 
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_methylset.jpg",height=900,width=600)
-
-par(mfrow=c(3,1),mar=c(5, 5, 2, 5), xpd=TRUE)
-
-multifreqpoly(beta,main="Multifreqpoly",xlab="Beta value")
-
-multifreqpoly(beta1,main="Multifreqpoly: Infinium I",xlab="Beta value")
-
-multifreqpoly(beta2,main="Multifreqpoly: Infinium II",xlab="Beta value")
- 
-dev.off()
-
-
-
-# When type I and type II probes are plotted separately the difference in modes between type I and II probes
-# can be appreciated. But when all probes are plotted together (Fig 4 top panels), the multidensity
-# plot obscures these differences, while they remain readily apparent in the multifreqpoly plot. In
-# addition, the multidensity plots appear to suggest that probes range in value from <0 to >1, whereas
-# multifreqpoly correctly show the range from 0 to 1
-#
-
-###############
-
-#  Data quality measures, including detection P values, number of beads for each methylation read
-#  and average intensities for bisulfite conversion probes can be extracted using the function QCinfo
-#  from an object of RGChannelSetExtended. According default or user specified quality score
-#  thresholds, the QCinfo can also identify and export a list of low quality samples and CpG probes.
-#  Outlier samples in total intensity or beta value distribution were often excluded before further
-#  analysis. Such samples were tricky to be identified, by default the argument outlier=TRUE will
-#  trigger the function to identify these outlier samples automatically. Quality score figures from
-#  QCinfo can be used to guide the selection of quality score thresholds. Low quality samples and
-#  probes can be filtered out using QCfilter or preprocessENmix.
-
-
-
-# throws ERROR: rgSet is not an object of class 'RGChannelSetExtended'
-#  qc<-QCinfo(rgSet)
-#  #exclude before backgroud correction
-# mdat<-preprocessENmix(rgSet, bgParaEst="oob", dyeCorr=TRUE, QCinfo=qc, nCores=6)
-# #Or exclude after background correction
-# mdat <- QCfilter(mdat,qcinfo=qc,outlier=TRUE)
-
-
-
-
-
-
-
-
-# detection p-vals Maksimovic paper
-
-detP <- detectionP(rgSet)
-head(detP)
-dim(detP)
-
-# % of probes in total and for each sample that have a detection p-value above 0.01:
-failed <- detP>0.01
-colMeans(failed)*100 # % of failed positions per sample
-sum(rowMeans(failed)>0.5) # How many positions failed in >50% of samples?
-
-
-pal <- brewer.pal(5,"Dark2")
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mean_detection_pvals.jpg",height=700,width=700)
-par(mfrow=c(1,1),oma=c(4, 2, 3, 3),xpd=TRUE)
-barplot(colMeans(detP),col=pal[as.factor(pD$sample)],las=2, cex.names=0.9,ylim = c(0,0.0003))
-mtext(side = 2, text = "Mean detection p-values", line = 4.5, cex=1.5)
-abline(h=0.01,col="red") 
-legend("topright", legend=levels(as.factor(pD$sample)),fill=pal, bg="white",ncol=1,inset=c(-0.05,0))
-dev.off()
-
-# remove poor quality samples
-
-keep <- colMeans(detP) <0.01
-rgSet = rgSet[,keep]
-rgSet  # no samples lost 03/01/2017
-
-# remove from detection p-val table:
-detP <- detP[,keep]
-dim(detP) # no samples lost 03/01/2017
-
-
-
-
-########################################## OK up to here, check QC below
-
-# following minfi manual
-
-# The RGChannelSet stores also a manifest object that contains the probe design information of the array:
-
-manifest <- getManifest(rgSet)
-manifest
-
-head(getProbeInfo(manifest))
-
-
-#
+multifreqpoly(assayData(mraw)$Meth+assayData(mraw)$Unmeth,xlab="Total intensity",legend=F)
 
 #  A RatioSet object is a class designed to store Beta values and/or M values instead of the methylated and unmethylated signals. 
-# An optional copy number matrix, CN, the sum of the methylated and unmethylated signals, can be also stored. Mapping a MethylSet 
-# to a RatioSet may be irreversible, i.e. one cannot be guaranteed to retrieve the methylated and unmethylated signals from a RatioSet. 
-# A RatioSet can be created with the function ratioConvert:
 
 RSet <- ratioConvert(mraw, what = "both", keepCN = TRUE)
 RSet
-
   # Preprocessing
   # Method: Raw (no normalization or bg correction)
   # minfi version: 1.18.6
   # Manifest version: 0.3.0
 
-
 # The functions getBeta, getM and getCN return respectively the Beta value matrix, M value matrix and the Copy Number matrix.
 
 beta <- getBeta(RSet)
+multifreqpoly(beta,main="Multifreqpoly",xlab="Beta value",legend=F)
 
-
-
-anno=getAnnotation(RSet)   # get the EPIC Annotation data
-
-
-beta1=beta[anno$Type=="I",]
-beta2=beta[anno$Type=="II",]
-
-
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_ratioset.jpg",height=900,width=600)
-
-par(mfrow=c(3,1),mar=c(5, 5, 2, 5), xpd=TRUE)
-
-multifreqpoly(beta,main="Multifreqpoly",xlab="Beta value")
-
-multifreqpoly(beta1,main="Multifreqpoly: Infinium I",xlab="Beta value")
-
-multifreqpoly(beta2,main="Multifreqpoly: Infinium II",xlab="Beta value")
-
-dev.off()
-
-# we see that the frequencies of the beta values haven't changed 
-
-# same with M values:
-
-mval<-getM(RSet)
-
-
-mval1=mval[anno$Type=="I",]
-mval2=mval[anno$Type=="II",]
-
-# I can't plot directly, because there are NaN and Inf values (that are tried to be used by the function to set the min x value)
-
-
-mval[is.infinite(mval)] <- NA
-mval <- na.omit(mval)
-
-mval1[is.infinite(mval1)] <- NA
-mval1 <- na.omit(mval1)
-
-mval2[is.infinite(mval2)] <- NA
-mval2 <- na.omit(mval2)
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_M_values.jpg",height=900,width=600)
-
-par(mfrow=c(3,1),mar=c(5, 5, 2, 5), xpd=TRUE)
-
-multifreqpoly(mval,main="Multifreqpoly",xlab="M value")
-
-multifreqpoly(mval1,main="Multifreqpoly: Infinium I",xlab="M value")
-
-multifreqpoly(mval2,main="Multifreqpoly: Infinium II",xlab="M value")
-
-dev.off()
-
-# remember that all that has been done doesn't include any normalization
-
-
-####### FIX THE FOLLOWING WITH CORRECT ANNOTATION ###########
 # The function mapToGenome applied to a RatioSet object will add genomic coordinates to each probe together with some additional annotation 
-# information. The output object is a GenomicRatioSet (class holding M or/and Beta values together with associated genomic coordinates). 
-# It is possible to merge the manifest object with the genomic locations by setting the option mergeManifest to TRUE.
+# information. The output object is a GenomicRatioSet 
 
 GRset <- mapToGenome(RSet,mergeManifest=TRUE)
 GRset
-
-# It is possible to merge the manifest object with the genomic locations by
-# setting the option mergeManifest to TRUE.
-
-
-# Note that the GenomicRatioSet extends the class SummarizedExperiment. Here are the main accessors functions to access the data:
-
-beta <- getBeta(GRset)
-M <- getM(GRset)
-CN <- getCN(GRset)
-
-sampleNames <- sampleNames(GRset)
-probeNames <- featureNames(GRset)
-pheno <- pData(GRset)
-
-
-# To return the probe locations as a GenomicRanges objects, one can use the accessor granges:
-
-gr <- granges(GRset)
-head(gr, n=3)
-
-# To access the full annotation, one can use the command getAnnotation:
-
-
-annotation <- getAnnotation(GRset)
-names(annotation)
-
-
-# It has been previously reported than about 5% of the probes on the EPIC array co-hybridize
-# to alternate genomic sequences, therefore potentially generating spurious signals (Pidsley et al., 2016).
-# Drop those probes.
-
-dim(GRset)
-GRset <- GRset[which(probeNames %notin% as.character(cross_reactive_EPIC[,1])),] # keep only probes that are not cross reactive
-dim(GRset)
-
-############### QC ##################################
-
-
-
-# minfi provides a simple quality control plot that uses the log median intensity in both the methylated (M) and unmethylated (U) channels. 
-# When plotting these two medians against each other, it has been observed that good samples cluster together, while failed samples tend to 
-# separate and have lower median intensities. In order to obtain the methylated and unmethylated signals, we need to convert the RGChannelSet 
-# to an object containing the methylated and unmethylated signals using the function preprocessRaw. It takes as input a RGChannelSet and converts 
-# the red and green intensities to methylated and unmethylated signals according to the special 450K probe design, and returns the converted signals
-# in a new object of class MethylSet. It does not perform any normalization.
-
-# The accessors getMeth and getUnmeth can be used to get the methylated and unmethylated intensities matrices:
-
-head(getMeth(mraw)[,1:3])
-head(getUnmeth(mraw)[,1:3])
-
-# The functions getQC and plotQC are designed to extract and plot the quality control information from the MethylSet:
-
-qc <- getQC(mraw)
-head(qc)
-
-par(mfrow=c(1,1)) 
-plotQC(qc)
-
-# Moreover, the function addQC applied to the MethylSet will add the QC information to the phenotype data.
-
-# To further explore the quality of the samples, it is useful to look at the Beta value densities of the samples, with the option to color 
-# the densities by sampleID. Already done previously with frequencies.
-
-# densityPlot(mraw, sampGroups = pD$sample)
-
-# or density bean plots:
-
-densityBeanPlot(mraw, sampGroups = pD$sample)
-
-
-
-
-
-########### # Control probes plot
-
-# The 450k array contains several internal control probes that can be used to assess the quality control of different sample preparation 
-# steps (bisulfite conversion, hybridization, etc.). The values of these control probes are stored in the initial RGChannelSet and can be 
-# plotted by using the function controlStripPlot and by specifying the control probe type:
-
-controlStripPlot(rgSet, controls="BISULFITE CONVERSION II")
-
-
-# qcReport(rgSet, pdf= "qcReport.pdf")   # it's not plotting properly
-
-
-############################################ normalization
-
-# The function preprocessQuantile implements stratified quantile normalization preprocessing for Illumina methylation microarrays. 
-# Probes are stratified by region (CpG island, shore, etc.).
-
-
-# normalize the data using Quantiles; this results in a GenomicRatioSet object 
-gset.quantile <- preprocessQuantile(rgSet)
-
-# another function, more apt for data with expected large scale differences:
-
-gset.funnorm <- preprocessFunnorm(rgSet)
-
-# visualise what the data looks like before and after normalisation 
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/before_after_quantile_normalization.jpg",height=700,width=1400)
-par(mfrow=c(2,1),mar=c(5, 5, 2, 5), xpd=TRUE)
-densityPlot(rgSet, sampGroups=pD$sample,main="Raw", legend=FALSE) 
-legend("topright", legend = levels(as.factor(pD$sample)), text.col=brewer.pal(8,"Dark2"),inset=c(-0.07,0))
-
-densityPlot(getBeta(gset.quantile), sampGroups=pD$sample, main="Normalized", legend=FALSE)
-legend("topright", legend = levels(as.factor(pD$sample)), text.col=brewer.pal(8,"Dark2"),inset=c(-0.07,0))
-
-dev.off()
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/before_after_funnorm_normalization.jpg",height=700,width=1400)
-par(mfrow=c(2,1),mar=c(5, 5, 2, 5), xpd=TRUE)
-densityPlot(rgSet, sampGroups=pD$sample,main="Raw", legend=FALSE) 
-legend("topright", legend = levels(as.factor(pD$sample)), text.col=brewer.pal(8,"Dark2"),inset=c(-0.07,0))
-
-densityPlot(getBeta(gset.funnorm), sampGroups=pD$sample, main="Normalized", legend=FALSE)
-legend("topright", legend = levels(as.factor(pD$sample)), text.col=brewer.pal(8,"Dark2"),inset=c(-0.07,0))
-
-dev.off()
-
-
-# MDS plots
-library(limma)
-colours37 = c("#466791","#60bf37","#953ada","#4fbe6c","#ce49d3","#a7b43d","#5a51dc","#d49f36","#552095",
-             "#507f2d","#db37aa","#84b67c","#a06fda","#df462a","#5b83db","#c76c2d","#4f49a3","#82702d",
-             "#dd6bbb","#334c22","#d83979","#55baad","#dc4555","#62aad3","#8c3025","#417d61","#862977",
-             "#bba672","#403367","#da8a6d","#a79cd4","#71482c","#c689d0","#6b2940","#d593a7","#895c8b",
-             "#bd5975") # larger selection of colours
-
-pal <- brewer.pal(5,"Dark2")
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_common_samples_stages_quantilenorm.jpg",height=700,width=1400)
-
-par(mfrow=c(1,2),mar=c(5, 5, 2, 5), xpd=TRUE)
-
-plotMDS(getM(gset.quantile), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)])
-legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
-
-
-plotMDS(getM(gset.quantile), top=1000, gene.selection="common", col=pal[as.factor(pD$sample)])
-legend("topright", legend=levels(as.factor(pD$sample)), text.col=pal, bg="white", cex=0.7)
-
-dev.off()
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_pairwise_samples_stages_quantilenorm.jpg",height=700,width=1400)
-
-par(mfrow=c(1,2),mar=c(5, 5, 2, 5), xpd=TRUE)
-
-plotMDS(getM(gset.quantile), top=1000, gene.selection="pairwise", col=colours37[as.factor(pD$stage)])
-legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
-
-
-plotMDS(getM(gset.quantile), top=1000, gene.selection="pairwise", col=pal[as.factor(pD$sample)])
-legend("topright", legend=levels(as.factor(pD$sample)), text.col=pal, bg="white", cex=0.7)
-dev.off()
-
-
-# funnorm
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_common_samples_stages_funnorm.jpg",height=700,width=1400)
-par(mfrow=c(1,2),mar=c(5, 5, 2, 5), xpd=TRUE)
-
-plotMDS(getM(gset.funnorm), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)])
-legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
-
-plotMDS(getM(gset.funnorm), top=1000, gene.selection="common", col=pal[as.factor(pD$sample)])
-legend("topright", legend=levels(as.factor(pD$sample)), text.col=pal, bg="white", cex=0.7)
-dev.off()
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_pairwise_samples_stages_funnorm.jpg",height=700,width=1400)
-par(mfrow=c(1,2),mar=c(5, 5, 2, 5), xpd=TRUE)
-
-plotMDS(getM(gset.funnorm), top=1000, gene.selection="pairwise", col=colours37[as.factor(pD$stage)])
-legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
-
-plotMDS(getM(gset.funnorm), top=1000, gene.selection="pairwise", col=pal[as.factor(pD$sample)])
-legend("topright", legend=levels(as.factor(pD$sample)), text.col=pal, bg="white", cex=0.7)
-dev.off()
-
-# Examine higher dimensions to look at other sources of variation 
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_common_samples_stages_secondaryPCs.jpg",height=700,width=2100)
-par(mfrow=c(1,3)) 
-
-plotMDS(getM(mSetSq), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)], dim=c(1,3))
-legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, cex=0.7, bg="white")
-
-plotMDS(getM(mSetSq), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)], dim=c(2,3))
-legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, cex=0.7, bg="white")
-
-plotMDS(getM(mSetSq), top=1000, gene.selection="common", col=colours37[as.factor(pD$stage)], dim=c(3,4))
-legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, cex=0.7, bg="white")
-
-dev.off()
-
-# # Violin Plots of methylation levels across the whole genome
-# library(vioplot)
-# vioplots_samples <- data.frame()
-# 
-# for(s in colnames(rgSet)){
-#   
-#   vioplots_samples[,s] = rgSet[,s]
-#   
-#   
-# }
-# vioplot(rgSet, names=pD$simple_id, col="gold")
-# title("Violin Plots of methylation levels across the whole genome")
-
-
-############ Filtering
 
 #Poor performing probes are generally filtered out prior to differential methylation analysis. 
 # As the signal from these probes is unreliable, by removing them we perform fewer statistical 
 # tests and thus incur a reduced multiple testing penalty. We filter out probes that have failed 
 # in one or more samples based on detection p-value.
 
-# ensure probes are in the same order in the mSetSq and detP objects 
-detP <- detP[match(featureNames(mSetSq),rownames(detP)),]
-# remove any probes that have failed in one or more samples 
-keep <- rowSums(detP < 0.01) == ncol(mSetSq) 
-table(keep)
-mean(!keep)*100 # % of failed probes in one or more samples
+detP <- detectionP(rgSet) # calculate detection p-vals 
 
-mSetSqFlt <- mSetSq[keep,] 
-mSetSqFlt # lost 4548 probes (0.5%)
+# % of probes in total and for each sample that have a detection p-value above 0.01:
+failed <- detP>0.01
+colMeans(failed)*100 # % of failed positions per sample
+sum(rowMeans(failed)>0.5) # How many positions failed in >50% of samples?
+
+# remove poor quality samples
+
+keep <- colMeans(detP) <0.01
+rgSet = rgSet[,keep]  
+# remove from detection p-val table:
+detP <- detP[,keep]
+dim(detP) # no samples lost 03/01/2017
+
+# ensure probes are in the same order in the mSetSq and detP objects 
+detP <- detP[match(featureNames(GRset),rownames(detP)),]
+# remove any probes that have failed in one or more samples 
+keep <- rowSums(detP < 0.01) == ncol(GRset) 
+table(keep)
+(table(keep)[1]/table(keep)[2])*100 # % of failed probes in one or more samples
+
+GRsetFlt <- GRset[keep,] 
+GRsetFlt # lost 4548 probes (0.5%)
 
 # remove probes from sex chromosomes
+anno=getAnnotation(GRset)
 
 # if your data includes males and females, remove probes on the sex chromosomes 
-keep <- !(featureNames(mSetSqFlt) %in% anno$Name[anno$chr %in% c("chrX","chrY")])
+keep <- !(featureNames(GRsetFlt) %in% anno$Name[anno$chr %in% c("chrX","chrY")])
 table(keep) 
-mSetSqFlt <- mSetSqFlt[keep,] # lost 19077 probes (2.2%)
+(table(keep)[1]/table(keep)[2])*100
+GRsetFlt <- GRsetFlt[keep,] # lost 19077 probes (2.3%)
 
 # removal of probes where common SNPs may affect the CpG. You can either remove all probes 
 # affected by SNPs (default), or only those with minor allele frequencies greater than a 
 # specified value.
 
 # remove probes with SNPs at CpG site 
-test= getSnpInfo(mSetSqFlt, snpAnno = NULL)
+# test= getSnpInfo(GRsetFlt, snpAnno = NULL)
+# 
+# GRsetFlt <- dropLociWithSnps(GRsetFlt,snpAnno = NULL) # is this using the annotation from the object?
+# 
+# GRsetFlt # lost 28453 probes (3.4%)
 
-mSetSqFlt <- dropLociWithSnps(mSetSqFlt,snpAnno = NULL) # is this using the annotation from the object?
+# Drop cross-hybridizing probes (aprox 5%).
 
-mSetSqFlt # lost 28453 probes (3.4%)
+probeNames <- featureNames(GRset)
+GRset <- GRset[which(probeNames %notin% as.character(cross_reactive_EPIC[,1])),] # keep only probes that are not cross reactive
+((866836-dim(GRset)[1])/866836)*100  #4.9%
 
-
-
-
-######test
-
-
-###### our pipeline – QN (quantile normalization?) in 6 categories
-
-
-library(minfi)
-library(ENmix)
-
-setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
-
-rgSet <- read.metharray.exp("all_for_R") # Reads an entire methylation array experiment 
-
-rgSet
-
-
-pheno=read.csv2(file="/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/3.Results/Phenotype.csv")
-pD <- pheno[,c(1,10)] # we keep sample name in the experiment and the corresponding stages and samples
-
-# add stage column
-stage= c("iPSC","iPSC","iPSC","DE","DE","DE","PGT","PGT","PGT","PFG","PFG","PFG","PE","PE","PE","EP","EN6","EN6","EN6","EN7","EN7","124I","141 (14-19)","177","179","182","184","124R","136","137","138","139")
-# add sample column
-sample=c("neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","SBAd3.1","neo1.1","SBAd2.1","SBAd3.1","neo1.1","SBAd3.1","ISL","ISL","ISL","ISL","ISL","ISL","R","R","R","R","R")
-
-# some samples are missing
-
-pD=cbind(pD,stage,sample)
-pD$Sample_Name=gsub( "^.*?_", "", pD$Sample_Name) # take out stage part of experiment id
-rownames(pD) <- pD$Sample_Name # add that as rownames
-rgSet <- rgSet[,pD$Sample_Name] # reordering before merging
-pData(rgSet) <- pD  # merging into pheno data of rgSet
-
-# give more descriptive names to our samples:
-pD$simple_id=paste(pD$stage,pD$sample,sep="-")
-sampleNames(rgSet) <- pD$simple_id
-
-
+############################################ normalization
 
 # QN function 
-
 
 source("/Users/Marta/Documents/WTCHG/R\ scripts/methylation\ from\ matthias/qnorm_function.R")
 library(preprocessCore)
 
-
-
-
 ##get detection p-values:
 
-dp <<- detectionP(rgSet, type = "m+u")
+dp <- detectionP(rgSet, type = "m+u")
 
 ## Type II probes
 TypeII.Name <- getProbeInfo(rgSet, type = "II")$Name
@@ -809,6 +360,7 @@ dev.off()
 par(mfrow=c(1,1))
 
 beta <- as.matrix(beta)
+
 
 
 

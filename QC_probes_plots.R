@@ -19,9 +19,9 @@ library(readr)
 
 # Read IDAT files
 #Currently minfi does not support reading compressed IDAT files. 
-# setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
+setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
 
-setwd("/Users/Marta/Documents/WTCHG/DPhil/Manuals/methylation/illumina\ methylation\ documentation/Demo\ Data\ EPIC")
+# setwd("/Users/Marta/Documents/WTCHG/DPhil/Manuals/methylation/illumina\ methylation\ documentation/Demo\ Data\ EPIC")
 
 
 rgSet <- read.metharray.exp("all_for_R") # Reads an entire methylation array experiment 
