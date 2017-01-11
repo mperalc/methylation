@@ -6,10 +6,13 @@ library(minfi)
 library(ENmix)
 library(GEOquery)
 
+`%notin%` <- function(x,y) !(x %in% y)
+
 # Read IDAT files
 #Currently minfi does not support reading compressed IDAT files. 
 setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
 
+cross_reactive_EPIC <- read.csv("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/cross-reactive_probes_Pidsley_2016/EPIC_cross_reactive_probes.csv",sep=";")
 
 rgSet <- read.metharray.exp("all_for_R") # Reads an entire methylation array experiment 
 
@@ -73,7 +76,7 @@ sampleNames(rgSet) <- pD$simple_id
 
 ############ probes QC  ####################
 
-plotCtrl(rgSet)  # generates all probes plots. Check with Illumina manual to detect anormalities.
+# plotCtrl(rgSet)  # generates all probes plots. Check with Illumina manual to detect anormalities.
 
 
 
@@ -345,7 +348,7 @@ pheno <- pData(GRset)
 # To return the probe locations as a GenomicRanges objects, one can use the accessor granges:
 
 gr <- granges(GRset)
-head(gr, n= 3)
+head(gr, n=3)
 
 # To access the full annotation, one can use the command getAnnotation:
 
@@ -354,7 +357,13 @@ annotation <- getAnnotation(GRset)
 names(annotation)
 
 
+# It has been previously reported than about 5% of the probes on the EPIC array co-hybridize
+# to alternate genomic sequences, therefore potentially generating spurious signals (Pidsley et al., 2016).
+# Drop those probes.
 
+dim(GRset)
+GRset <- GRset[which(probeNames %notin% as.character(cross_reactive_EPIC[,1])),] # keep only probes that are not cross reactive
+dim(GRset)
 
 ############### QC ##################################
 
@@ -611,7 +620,7 @@ sampleNames(rgSet) <- pD$simple_id
 
 source("/Users/Marta/Documents/WTCHG/R\ scripts/methylation\ from\ matthias/qnorm_function.R")
 library(preprocessCore)
-`%notin%` <- function(x,y) !(x %in% y)
+
 
 
 
@@ -797,7 +806,7 @@ multifreqpoly(beta,main="After",xlab="Beta value",legend=F)
 
 dev.off()
 
-
+par(mfrow=c(1,1))
 
 beta <- as.matrix(beta)
 
