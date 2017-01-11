@@ -7,10 +7,21 @@ library(RColorBrewer)
 library(minfi)
 library(ENmix)
 library(GEOquery)
+library(readr)
+# manifest object
+
+# manifest <- read_csv("/Users/Marta/Documents/WTCHG/DPhil/Manuals/methylation/illumina\ methylation\ documentation/MethylationEPIC_v-1-0_B2.csv")
+
+# our_manifest <- read_csv("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/3.Results/ManifestFile/MethylationEPIC_v-1-0_B2.bpm")
+
+# manifest_450 <- read_csv("/Users/Marta/Documents/WTCHG/DPhil/Manuals/methylation/illumina\ methylation\ documentation/HumanMethylation450_15017482_v1-2.csv")
+
 
 # Read IDAT files
 #Currently minfi does not support reading compressed IDAT files. 
-setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
+# setwd("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/P160281_MethylationEPIC_NicolaBeer.idats")
+
+setwd("/Users/Marta/Documents/WTCHG/DPhil/Manuals/methylation/illumina\ methylation\ documentation/Demo\ Data\ EPIC")
 
 
 rgSet <- read.metharray.exp("all_for_R") # Reads an entire methylation array experiment 
@@ -35,7 +46,7 @@ head(sampleNames(rgSet))
 # Most of the columns in this phenotype data are irrelevant (contains data such as the 
 # address of the person who submitted the data); we keep the useful ones.
 
-
+#########ignore the following phenotype data in the example Illumina EPIC dataset
 
 pheno=read.csv2(file="/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/P160281_MethylationEPIC_NicolaBeer/03.archive/3.Results/Phenotype.csv")
 
@@ -114,9 +125,33 @@ plotCtrl <- function(rgSet,IDorder=NULL)
   #fine above
   
   # fix missing values in ctrls
+  #bisulfite conversion 1
+  #specificity I ?
   
+  #change some colours in bisulfite conv II. Also, wrong order of intensity of the probes in my data?
+  
+  # fix y axis in negative green
+  # what is the outlier in negative red?
+  
+  #target removal red: probe 1 should have larger intensity than 2
+  
+  #ok: 
+    # norm_ACGT
+    # extension
+    # non-polymorphic   
+    # norm_A, norm_T, norm_G, norm_C
+    # specificity II
+  
+  #fixed: 
+    #staining: removed probes names from the legend that are not being plotted (-99 colour assigned)
+  
+  
+  #hybridization: 
+  #make low darkolivegreen , medium limegreen and high yellowgreen
+ ctrls[which(ctrls$Type=="HYBRIDIZATION" & ctrls$ExtendedType=="Hyb (Low)" ),"Color"]= "darkolivegreen"
+ ctrls[which(ctrls$Type=="HYBRIDIZATION" & ctrls$ExtendedType=="Hyb (Medium)" ),"Color"]= "limegreen"
+ ctrls[which(ctrls$Type=="HYBRIDIZATION" & ctrls$ExtendedType=="Hyb (High)" ),"Color"]= "yellowgreen"
  
-  
   for(ctype in contlid)  # loop through every type of plot
   {
     fn <- ctype;fn <- gsub(" ","_",fn)
@@ -175,6 +210,7 @@ plotCtrl <- function(rgSet,IDorder=NULL)
     {
       par(mar=c(5, 4, 4, 8.2))
       idx <- t(replicate(nrow(red),1:ncol(red)))
+      
       if(ctype=="STAINING"){ # fixed so that DNP(20k) and Biotin(5k) - ignored by illumina EPIC table - don't appear
         plot(idx,grn,col=as.vector(cc$Color),ylim=c(0,ymax),main=paste(ctype,
                                                                        " Green",sep=""),bty="o",xlab="Sample",ylab="Intensity",cex.lab=1.2)
@@ -199,4 +235,6 @@ plotCtrl <- function(rgSet,IDorder=NULL)
     }
     dev.off()
   }
-  }
+}
+
+plotCtrl(rgSet)
