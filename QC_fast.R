@@ -6,6 +6,8 @@ library(minfi)
 library(ENmix)
 library(GEOquery)
 library(wateRmelon) # for BMIQ normalization
+library(preprocessCore)  # different normalization functions
+
 
 `%notin%` <- function(x,y) !(x %in% y)
 
@@ -103,53 +105,52 @@ RSet
 
 # The functions getBeta, getM and getCN return respectively the Beta value matrix, M value matrix and the Copy Number matrix.
 
-beta <- getBeta(RSet)
-multifreqpoly(beta,main="Multifreqpoly",xlab="Beta value",legend=F)
+# beta <- getBeta(RSet)
+# multifreqpoly(beta,main="Multifreqpoly",xlab="Beta value",legend=F)
 
-# The function mapToGenome applied to a RatioSet object will add genomic coordinates to each probe together with some additional annotation 
-# information. The output object is a GenomicRatioSet 
-
-GRset <- mapToGenome(RSet,mergeManifest=TRUE)
-GRset
+# # The function mapToGenome applied to a RatioSet object will add genomic coordinates to each probe together with some additional annotation 
+# # information. The output object is a GenomicRatioSet 
+# 
+ GRset <- mapToGenome(RSet,mergeManifest=TRUE)
+ GRset
 
 #Poor performing probes are generally filtered out prior to differential methylation analysis. 
 # As the signal from these probes is unreliable, by removing them we perform fewer statistical 
 # tests and thus incur a reduced multiple testing penalty. We filter out probes that have failed 
 # in one or more samples based on detection p-value.
 
-detP <- detectionP(rgSet) # calculate detection p-vals 
+#detP <- detectionP(rgSet) # calculate detection p-vals 
 
-# % of probes in total and for each sample that have a detection p-value above 0.01:
-failed <- detP>0.01
-colMeans(failed)*100 # % of failed positions per sample
-sum(rowMeans(failed)>0.5) # How many positions failed in >50% of samples?
+# # % of probes in total and for each sample that have a detection p-value above 0.01:
+# failed <- detP>0.01
+# colMeans(failed)*100 # % of failed positions per sample
+# sum(rowMeans(failed)>0.5) # How many positions failed in >50% of samples?
+# 
+# # remove poor quality samples
+# 
+# keep <- colMeans(detP) <0.01
+# rgSet = rgSet[,keep]  
+# # remove from detection p-val table:
+# detP <- detP[,keep]
+# dim(detP) # no samples lost 03/01/2017
 
-# remove poor quality samples
-
-keep <- colMeans(detP) <0.01
-rgSet = rgSet[,keep]  
-# remove from detection p-val table:
-detP <- detP[,keep]
-dim(detP) # no samples lost 03/01/2017
-
-# ensure probes are in the same order in the mSetSq and detP objects 
-detP <- detP[match(featureNames(GRset),rownames(detP)),]
-# remove any probes that have failed in one or more samples 
-keep <- rowSums(detP < 0.01) == ncol(GRset) 
-table(keep)
-(table(keep)[1]/table(keep)[2])*100 # % of failed probes in one or more samples
-
-GRsetFlt <- GRset[keep,] 
-GRsetFlt # lost 4548 probes (0.5%)
+# # ensure probes are in the same order in the mSetSq and detP objects 
+# detP <- detP[match(featureNames(GRset),rownames(detP)),]
+# # remove any probes that have failed in one or more samples 
+# keep <- rowSums(detP < 0.01) == ncol(GRset) 
+# table(keep)
+# (table(keep)[1]/table(keep)[2])*100 # % of failed probes in one or more samples
+# 
+# GRsetFlt <- GRset[keep,] 
+# GRsetFlt # lost 4548 probes (0.5%)
 
 # remove probes from sex chromosomes
 anno=getAnnotation(GRset)
 
 # if your data includes males and females, remove probes on the sex chromosomes 
-keep <- !(featureNames(GRsetFlt) %in% anno$Name[anno$chr %in% c("chrX","chrY")])
-table(keep) 
-(table(keep)[1]/table(keep)[2])*100
-GRsetFlt <- GRsetFlt[keep,] # lost 19077 probes (2.3%)
+discard <- intersect(featureNames(GRset), anno$Name[anno$chr %in% c("chrX","chrY")])
+length(discard) # 19681
+(length(discard)/length(featureNames(GRset)))*100 # to lose 19681 probes (2.3%)
 
 # removal of probes where common SNPs may affect the CpG. You can either remove all probes 
 # affected by SNPs (default), or only those with minor allele frequencies greater than a 
@@ -165,15 +166,16 @@ GRsetFlt <- GRsetFlt[keep,] # lost 19077 probes (2.3%)
 # Drop cross-hybridizing probes (aprox 5%).
 
 probeNames <- featureNames(GRset)
-GRset <- GRset[which(probeNames %notin% as.character(cross_reactive_EPIC[,1])),] # keep only probes that are not cross reactive
-((866836-dim(GRset)[1])/866836)*100  #4.9%
+discard2 <- intersect(probeNames,as.character(cross_reactive_EPIC[,1])) # keep only probes that are not cross reactive
+length(discard2) # 43254
+(length(discard2)/length(featureNames(GRset)))*100   #5%
+
+discard=unique(c(discard,discard2)) # 62935
+(length(discard)/length(featureNames(GRset)))*100  # 7.10% of the original probes will be lost
 
 ############################################ normalization
 
 # QN function 
-
-source("/Users/Marta/Documents/WTCHG/R\ scripts/methylation\ from\ matthias/qnorm_function.R")
-library(preprocessCore)
 
 ##get detection p-values:
 
@@ -187,8 +189,6 @@ rownames(TypeII.Red) <- TypeII.Name
 colnames(TypeII.Red) <- sampleNames(rgSet)
 rownames(TypeII.Green) <- TypeII.Name
 colnames(TypeII.Green) <- sampleNames(rgSet)
-
-
 
 ## Type I probes, split into green and red channels
 TypeI.Green.Name <- getProbeInfo(rgSet, type = "I-Green")$Name
@@ -208,16 +208,14 @@ rownames(TypeI.Red.U) <- TypeI.Red.Name
 colnames(TypeI.Red.U) <- sampleNames(rgSet)
 
 ##remove high missingness probes
-d = ifelse(dp<0.1,1,NA) # if p-value <0.1, make it 1. Else, make it NA.
+d = ifelse(dp<0.01,1,NA) # if p-value <0.1, make it 1. Else, make it NA.
 cr = data.frame(rowSums(is.na(d))/length(d[1,])) # sums NAs in each row, then divide by nº of samples.
   # In the end, it excludes probes with p-values above 1 in a min of 1 sample. Why the formula, then?
 exclude.badcalls = rownames(cbind(cr,rownames(cr))[cbind(cr,rownames(cr))[,1]>0.02,])
 
 # test=names(as.matrix(cr)[which(as.matrix(cr)[,1]>0.02),])  # does the same as exclude.badcalls
 
-
-
-exclude.sites = exclude.badcalls  # what should I do with these? 3049 failed probes
+exclude.sites = unique(c(exclude.badcalls,discard))  #  4548 failed probes + previous ones = 65321
 
 ##exclude.sites = unique(rbind(as.matrix(exclude.chrX), as.matrix(exclude.chrY),as.matrix(exclude.cas),as.matrix(exclude.snps),as.matrix(crossmap),as.matrix(exclude.badcalls), as.matrix(exclude.mhc)))
 
@@ -239,15 +237,15 @@ TypeI.Red.M = subset(TypeI.Red.M, select=samples)
 TypeI.Red.U = subset(TypeI.Red.U, select=samples)
   # Everything stays the same.
 
-##set NAs
-d = subset(dp, select = samples) # no failed samples
-TypeII.Green = TypeII.Green * ifelse(d[rownames(TypeII.Green),]==0,1,NA) # by multiplication, set probes and samples with high p-values to NA
-TypeII.Red = TypeII.Red * ifelse(d[rownames(TypeII.Red),]==0,1,NA)
-TypeI.Green.M = TypeI.Green.M * ifelse(d[rownames(TypeI.Green.M),]==0,1,NA)
-TypeI.Green.U = TypeI.Green.U * ifelse(d[rownames(TypeI.Green.U),]==0,1,NA)
-TypeI.Red.M = TypeI.Red.M * ifelse(d[rownames(TypeI.Red.M),]==0,1,NA)
-TypeI.Red.U = TypeI.Red.U * ifelse(d[rownames(TypeI.Red.U),]==0,1,NA)
-  # why this step?
+#set NAs -- this step is including NAs that shouldn't be there?????????
+# d = subset(dp, select = samples) # no failed samples
+# TypeII.Green = TypeII.Green * ifelse(d[rownames(TypeII.Green),]==0,1,NA) # by multiplication, set probes and samples with high p-values to NA
+# TypeII.Red = TypeII.Red * ifelse(d[rownames(TypeII.Red),]==0,1,NA)
+# TypeI.Green.M = TypeI.Green.M * ifelse(d[rownames(TypeI.Green.M),]==0,1,NA)
+# TypeI.Green.U = TypeI.Green.U * ifelse(d[rownames(TypeI.Green.U),]==0,1,NA)
+# TypeI.Red.M = TypeI.Red.M * ifelse(d[rownames(TypeI.Red.M),]==0,1,NA)
+# TypeI.Red.U = TypeI.Red.U * ifelse(d[rownames(TypeI.Red.U),]==0,1,NA)
+##why this step?
 
 #--------------------------------------------------------------------------------------------------------------------------------
 ##calculate betas - no QN
@@ -256,8 +254,6 @@ TypeI.Green.betas = TypeI.Green.M/(TypeI.Green.M+TypeI.Green.U+100) # here (type
 TypeI.Red.betas = TypeI.Red.M/(TypeI.Red.M+TypeI.Red.U+100) # same
 beta.noQN=rbind(TypeII.betas,TypeI.Green.betas,TypeI.Red.betas)  # unifying the 3 matrices, I get as a sum the total number of probes
 # colnames(beta.noQN)<-gsub("^X","",colnames(beta.noQN)) # Once I rename the sample, this is useless
-
-
 
 # plot beta values and see how they change from previous plots
 
@@ -271,7 +267,6 @@ par(mfrow=c(3,1),mar=c(5, 5, 2, 5), xpd=TRUE)
 multifreqpoly(beta.noQN,main="All probes",xlab="Beta value",legend=F)
 # legend("topright", legend = as.factor(pD$sample),fill=as.factor(pD$sample),inset=c(-0.07,0)) # colouring error
 
-
 multifreqpoly(rbind(TypeI.Red.betas,TypeI.Green.betas),main="Multifreqpoly: Infinium I",xlab="Beta value",legend=F)
 
 multifreqpoly(TypeII.betas,main="Multifreqpoly: Infinium II",xlab="Beta value",legend=F)
@@ -280,14 +275,9 @@ dev.off()
 
   # my previous results and Matthias' are exactly the same
 
-
-
 beta.noQN=as.matrix(beta.noQN)
 ##save(beta.noQN, file="beta_noQN.RData")
 ##rm(beta.noQN, TypeII.betas,TypeI.Green.betas,TypeI.Red.betas)
-
-
-
 
 #############QN (quantile normalization)
 
@@ -323,30 +313,23 @@ colnames(TypeI.Red.betas)=colnames(TypeI.Red.M)
 beta=rbind(TypeII.betas,TypeI.Green.betas,TypeI.Red.betas)
 # colnames(beta)<-gsub("^X","",colnames(beta))
 
-  # has 3049 less probes than the unnormalized version
+  # has 65321 less probes than the unnormalized version
 
-
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_Matthias_pipeline_filtered_and_QN.jpg",height=900,width=600)
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_Matthias_pipeline_filtered_and_QN_without_CR_probes.jpg",height=900,width=600)
 
 par(mfrow=c(3,1),mar=c(5, 5, 2, 5), xpd=TRUE)
 
 multifreqpoly(beta,main="All probes",xlab="Beta value",legend=F)
 # legend("topright", legend = as.factor(pD$sample),fill=as.factor(pD$sample),inset=c(-0.07,0)) # colouring error
-
-
 multifreqpoly(rbind(TypeI.Red.betas,TypeI.Green.betas),main="Multifreqpoly: Infinium I",xlab="Beta value",legend=F)
-
 multifreqpoly(TypeII.betas,main="Multifreqpoly: Infinium II",xlab="Beta value",legend=F)
 
 dev.off()
 
 # most changes in type II probe distribution (in abs value). Also in type I.
-
 # before and after filtering and normalization:
 
-
-jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_Matthias_pipeline_comparison_un-normalized.jpg",height=900,width=600)
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/multifreq_plots_beta_values_Matthias_pipeline_removing_CRprobes_comparison_un-normalized.jpg",height=900,width=600)
 
 par(mfrow=c(2,1),mar=c(5, 5, 2, 5), xpd=TRUE)
 
@@ -354,18 +337,21 @@ multifreqpoly(beta.noQN,main="Before filtering and QN",xlab="Beta value",legend=
 
 multifreqpoly(beta,main="After",xlab="Beta value",legend=F)
 
-
 dev.off()
 
-par(mfrow=c(1,1))
+
+
 
 beta <- as.matrix(beta)
+rm(TypeII.Red,TypeII.Green,TypeI.Green.M,TypeI.Green.U,TypeI.Red.M,TypeI.Red.U)
 
+##########end of QNorm function
 
+dim(beta)
 
+m=log2(beta/(1-beta))    #M=log2(Beta/(1-Beta))
 
+par(mfrow=c(1,1))
+multifreqpoly(m,main="M values after filtering and normalization",xlab="M value",legend=F)
 
-
-##########end of test
-
-
+Nas=which(is.na(m))  # which rows have NA?
