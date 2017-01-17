@@ -8,6 +8,7 @@ library(GEOquery)
 library(wateRmelon) # for BMIQ normalization
 library(preprocessCore)  # different normalization functions
 
+currentDate <- Sys.Date() # to save date in name of output files
 
 `%notin%` <- function(x,y) !(x %in% y)
 
@@ -355,3 +356,96 @@ par(mfrow=c(1,1))
 multifreqpoly(m,main="M values after filtering and normalization",xlab="M value",legend=F)
 
 Nas=which(is.na(m))  # which rows have NA?
+
+
+#### plot how samples cluster before and after filtering & normalization
+
+before.quantile <- preprocessQuantile(rgSet)
+
+# MDS
+
+colours37 = c("#466791","#60bf37","#953ada","#4fbe6c","#ce49d3","#a7b43d","#5a51dc","#d49f36","#552095",
+              "#507f2d","#db37aa","#84b67c","#a06fda","#df462a","#5b83db","#c76c2d","#4f49a3","#82702d",
+              "#dd6bbb","#334c22","#d83979","#55baad","#dc4555","#62aad3","#8c3025","#417d61","#862977",
+              "#bba672","#403367","#da8a6d","#a79cd4","#71482c","#c689d0","#6b2940","#d593a7","#895c8b",
+              "#bd5975") # larger selection of colours
+
+
+jpeg("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/mds_pairwise_stages_before_after_filtering_QN.jpg",height=700,width=1400)
+
+par(mfrow=c(1,2),mar=c(5, 5, 2, 5), xpd=TRUE)
+
+plotMDS(getM(before.quantile), top=1000, gene.selection="pairwise", col=colours37[as.factor(pD$stage)])
+legend("topleft", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
+
+plotMDS(m, top=1000, gene.selection="pairwise", col=colours37[as.factor(pD$stage)])
+legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
+dev.off()
+
+# PCA
+
+plot_pca=function(x){
+  pca1<-prcomp(t(x), retx=TRUE,scale. = F)   # transpose so that samples are in rows, and probes in columns
+  
+  # plot(pca1, type = "l") #variance vs first 10 components
+  summary(pca1)          #importance of each component (important line is "proportion of variance")
+  
+  percentVar <- (pca1$sdev)^2 / sum(pca1$sdev^2)
+  percentVar <- round(100 * percentVar)
+  pcs <- as.data.frame(pca1$x)
+  pcs <- cbind(pcs,sample=sample,stage=stage)
+  pcs$sample=factor(pcs$sample,levels=unique(sample))
+  pcs$stage=factor(pcs$stage,levels=unique(stage))
+  # pcs$stage <- ordered(pcs$stage, levels = stage)
+  
+  p <- ggplot(pcs, aes(PC1, PC2, colour=stage, shape=sample)) + 
+    geom_point(size = 3) + xlab (paste0( "PC1:" ,percentVar[ 1 ],"% variance")) + 
+    ylab (paste0( "PC2: ",percentVar[ 2 ],"% variance" ))
+  p <- p + theme(	panel.grid.major = element_blank(), panel.grid.minor = element_blank(), 
+                  panel.background = element_blank(),
+                  panel.border = element_rect(fill = NA, colour = "black"), 
+                  legend.key = element_blank(),# legend.position = c(0.5,0.5),
+                  axis.title.y = element_text(face="bold", angle=90, size=12, vjust=0.2),
+                  axis.title.x = element_text(face="bold", size=12, vjust=0),
+                  axis.text.x = element_text(face="bold", colour = "black", angle=90, size=12, vjust=0.2, hjust =1 ),
+                  axis.text.y = element_text(face="bold", colour = "black"),
+                  axis.ticks = element_line(colour = "black"),
+                  axis.line = element_line(colour = "black"),
+                  legend.position = "bottom",
+                  legend.text = element_text(size=7))
+  
+  return(p)
+}
+
+p1=plot_pca(m)
+ggsave(paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/PCA_after_filtering_and_QN",currentDate,".jpg",sep=""),p1,width=8,height=8,units="in",dpi=300)
+
+# plot without adult islets (R and ISL)
+
+library(pheatmap)
+
+plot_sdc=function(x){
+  sampleDists <- dist(t(x))   
+  #This function computes and returns the distance matrix computed by using the specified distance measure to compute the distances between the rows of a data matrix.
+  # by default, "euclidean"
+  sampleDistMatrix <- as.matrix(sampleDists)
+ 
+  colnames(sampleDistMatrix) <- NULL
+  colors <- colorRampPalette( rev(brewer.pal(9, "Blues")) )(255)
+  
+  #png("/Users/Marta/Documents/WTCHG/DPhil/Plots/atac-seq/distance_matrix_voom_peaks.png", type="cairo",
+  #    width=7,height=5,units="in",res=200,pointsize = 13)
+  
+  sdc= pheatmap(sampleDistMatrix, clustering_distance_rows=sampleDists, clustering_distance_cols=sampleDists, col=colors)
+  
+  # dev.off()
+  
+  return(sdc)
+}
+
+sdc=plot_sdc(m) 
+
+# png("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/sdc_after_filtering_QN.png",height=9,width=9,units="in",res=300)
+print(sdc)
+# dev.off()
+
