@@ -239,13 +239,13 @@ TypeI.Red.U = subset(TypeI.Red.U, select=samples)
   # Everything stays the same.
 
 #set NAs -- this step is including NAs that shouldn't be there?????????
-# d = subset(dp, select = samples) # no failed samples
-# TypeII.Green = TypeII.Green * ifelse(d[rownames(TypeII.Green),]==0,1,NA) # by multiplication, set probes and samples with high p-values to NA
-# TypeII.Red = TypeII.Red * ifelse(d[rownames(TypeII.Red),]==0,1,NA)
-# TypeI.Green.M = TypeI.Green.M * ifelse(d[rownames(TypeI.Green.M),]==0,1,NA)
-# TypeI.Green.U = TypeI.Green.U * ifelse(d[rownames(TypeI.Green.U),]==0,1,NA)
-# TypeI.Red.M = TypeI.Red.M * ifelse(d[rownames(TypeI.Red.M),]==0,1,NA)
-# TypeI.Red.U = TypeI.Red.U * ifelse(d[rownames(TypeI.Red.U),]==0,1,NA)
+d = subset(dp, select = samples) # no failed samples
+TypeII.Green = TypeII.Green * ifelse(d[rownames(TypeII.Green),]<=0.1,1,NA) # by multiplication, set probes and samples with high p-values to NA
+TypeII.Red = TypeII.Red * ifelse(d[rownames(TypeII.Red),]<=0.1,1,NA)
+TypeI.Green.M = TypeI.Green.M * ifelse(d[rownames(TypeI.Green.M),]<=0.1,1,NA)
+TypeI.Green.U = TypeI.Green.U * ifelse(d[rownames(TypeI.Green.U),]<=0.1,1,NA)
+TypeI.Red.M = TypeI.Red.M * ifelse(d[rownames(TypeI.Red.M),]<=0.1,1,NA)
+TypeI.Red.U = TypeI.Red.U * ifelse(d[rownames(TypeI.Red.U),]<=0.1,1,NA)
 ##why this step?
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -355,7 +355,7 @@ m=log2(beta/(1-beta))    #M=log2(Beta/(1-Beta))
 par(mfrow=c(1,1))
 multifreqpoly(m,main="M values after filtering and normalization",xlab="M value",legend=F)
 
-Nas=which(is.na(m))  # which rows have NA?
+Nas=which(is.na(m))  # which rows have NA? 
 
 
 #### plot how samples cluster before and after filtering & normalization
@@ -382,9 +382,9 @@ plotMDS(m, top=1000, gene.selection="pairwise", col=colours37[as.factor(pD$stage
 legend("topright", legend=levels(as.factor(pD$stage)), text.col=colours37, bg="white", cex=0.7)
 dev.off()
 
-# PCA
+# PCA after filtering and normalization
 
-plot_pca=function(x){
+plot_pca=function(x,sample,stage){
   pca1<-prcomp(t(x), retx=TRUE,scale. = F)   # transpose so that samples are in rows, and probes in columns
   
   # plot(pca1, type = "l") #variance vs first 10 components
@@ -417,10 +417,16 @@ plot_pca=function(x){
   return(p)
 }
 
-p1=plot_pca(m)
+p1=plot_pca(m,sample=sample,stage=stage)
 ggsave(paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/PCA_after_filtering_and_QN",currentDate,".jpg",sep=""),p1,width=8,height=8,units="in",dpi=300)
 
 # plot without adult islets (R and ISL)
+
+p_nadults=plot_pca(m[,1:21],sample=sample[1:21],stage= stage[1:21] )
+ggsave(paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/PCA_after_filtering_and_QN_no_adult_islets",currentDate,".jpg",sep=""),p_nadults,width=8,height=8,units="in",dpi=300)
+
+# sample distance cluster
+
 
 library(pheatmap)
 
@@ -448,4 +454,54 @@ sdc=plot_sdc(m)
 # png("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/sdc_after_filtering_QN.png",height=9,width=9,units="in",res=300)
 print(sdc)
 # dev.off()
+
+#heatmap with ggplot
+create_heatmap_cor=function(x){
+  cormat <- round(cor(x),2)
+  head(cormat)
+  
+  # Get upper triangle of the correlation matrix
+  get_upper_tri <- function(cormat){
+    cormat[lower.tri(cormat)]<- NA
+    return(cormat)
+  }
+  upper_tri <- get_upper_tri(cormat)
+  upper_tri
+  # Melt the correlation matrix
+  library(reshape2)
+  melted_cormat <- melt(upper_tri, na.rm = TRUE)
+  # Create a ggheatmap
+  ggheatmap <- ggplot(melted_cormat, aes(Var2, Var1, fill = value))+
+    geom_tile(color = "white")+
+    scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                         midpoint = 0, limit = c(-1,1), space = "Lab", 
+                         name="Pearson\nCorrelation") +
+    theme_minimal()+ # minimal theme
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                     size = 12, hjust = 1))+
+    coord_fixed()
+  # Print the heatmap
+  print(ggheatmap)
+  
+  # add correlation in each cell
+  ggheatmap + 
+    geom_text(aes(Var2, Var1, label = value), color = "black", size = 4) +
+    theme(
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.border = element_blank(),
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      legend.justification = c(1, 0),
+      legend.position = c(0.6, 0.7),
+      legend.direction = "horizontal")+
+    guides(fill = guide_colorbar(barwidth = 7, barheight = 1,
+                                 title.position = "top", title.hjust = 0.5))
+  
+}
+
+# heatmap is made with pearson correlation from m values, and doesn't provide information (as samples are too highly correlated). 
+
+
 
