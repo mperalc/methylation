@@ -125,7 +125,9 @@ QC.GUI(CpG=rownames(beta_diffcells),arraytype="EPIC")
 
 # need design to test 1 sample vs all others (peak/stage-specific) or using contrasts against iPSC(timecourse/across-stages)
 myDMR_peak <- champ.DMR(beta=beta_diffcells,pheno=design_peak$group,method="Bumphunter",arraytype = "EPIC")
-myDMR_timecourse <- champ.DMR(beta=beta_diffcells,pheno=design_timecourse$group,method="Bumphunter",arraytype = "EPIC")
 
-DMR.GUI(DMR=myDMR_timecourse)
+# ChAMP only tests two groups. Ensure the comparisons are correct!
+myDMR_timecourse <- champ.DMR(beta=beta_diffcells[,c(1:6)],pheno=design_timecourse$group[1:6],method="Bumphunter",arraytype = "EPIC")
+
+DMR.GUI(DMR=myDMR_timecourse,beta=beta_diffcells,pheno=design_timecourse$group,arraytype = "EPIC") # not doing what it's supposed to do
 
