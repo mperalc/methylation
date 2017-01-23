@@ -350,6 +350,10 @@ rm(TypeII.Red,TypeII.Green,TypeI.Green.M,TypeI.Green.U,TypeI.Red.M,TypeI.Red.U)
 
 dim(beta)
 
+# save for diff methylation analysis
+# write.csv(beta, "/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/quantile_normalised_beta_detP_0.01_nocrossreact.csv", col.names=T,row.names=T, quote=F)
+# write.csv(pD, "/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/samples_info.csv", col.names=T, row.names=T, quote=F)
+
 m=log2(beta/(1-beta))    #M=log2(Beta/(1-Beta))
 
 par(mfrow=c(1,1))
