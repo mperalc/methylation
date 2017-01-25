@@ -196,9 +196,75 @@ for(s in stages[2:length(stages)]){
   x = c("iPSC",s) # two stages to contrast
   print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
   beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
-  myDMP_timecourse[[s]] <- champ.DMP(beta = beta_sub, 
-                     pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
-                     arraytype = "EPIC"   ) # call function
+  
+  if(is.null(dim(beta_diffcells[ , grepl(x[2] , colnames( beta_diffcells ))]))){
+    # if second stage (not iPSC) only has one column, do this alternative version of champ.DMP
+    # Here there's no average beta value for each CpG in the stage with one sample, just its only beta value
+    # As there are not replicates, this is not a true differential methylation analysis. Hence the message:
+    message(paste("The stage",x[2],"has only one sample. Doing DMP variation, but do not trust results.",sep=" "))
+    message("[===========================]")
+    message("[<<<<< ChAMP.DMP VARIATION STARTING >>>>>]")
+    message("-----------------------------")
+    
+    ### setup
+    beta=beta_sub
+    pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s))
+    arraytype = "EPIC"
+    message(paste("The array type is",arraytype,sep=" "))
+    adjPVal = 0.05
+    message(paste("The adjusted p-val threshold to report is",adjPVal,sep=" "))
+    adjust.method = "BH"
+    message(paste("The adjustment method for multiple testing is",adjust.method,sep=" "))
+    
+    
+    #end of setup 
+    
+    message("\n<< Your pheno information contains following groups. >>")
+    sapply(unique(pheno),function(x) message("<",x,">:",sum(pheno==x)," samples."))
+    message("[The power of statistics analysis on groups contain very few samples may not be strong.]")
+    
+    message("You did not assign compare groups. The first two groups: <",unique(pheno)[1],"> and <",unique(pheno)[2],">, will be compared automatically.")
+    compare.group <- unique(pheno)[1:2]
+    
+    p <- pheno[which(pheno %in% compare.group)]
+    beta <- beta[,which(pheno %in% compare.group)]
+    design <- model.matrix( ~ 0 + p)
+    # contrast.matrix requires the initial groups from pheno to be recorded as factors, preferably names (for example, stages)
+    contrast.matrix <- makeContrasts(contrasts=paste(colnames(design)[2:1],collapse="-"), levels=colnames(design))
+    message("\n<< Contrast Matrix >>")
+    print(contrast.matrix)
+    
+    message("\n<< All beta, pheno and model are prepared successfully. >>")
+    
+    fit <- lmFit(beta, design)
+    fit2 <- contrasts.fit(fit,contrast.matrix)
+    tryCatch(fit3 <- eBayes(fit2),
+             warning=function(w) 
+             {
+               stop("limma failed, No sample variance.\n")
+             }) # if the contrast matrix is not correct, DMP function will fail here
+    
+    DMP <- topTable(fit3,coef=1,number=nrow(beta),adjust.method=adjust.method,p.value=adjPVal)
+    message("You have found ",sum(DMP$adj.P.Val <= adjPVal), " significant MVPs with a ",adjust.method," adjusted P-value below ", adjPVal,".")
+    message("\n<< Calculate DMP successfully. >>")
+    
+    if(arraytype == "EPIC") data(probe.features.epic) else data(probe.features)
+    com.idx <- intersect(rownames(DMP),rownames(probe.features))
+    avg <-  cbind(rowMeans(beta[com.idx,which(p==compare.group[1])]),beta[com.idx,which(p==compare.group[2])])
+    avg <- cbind(avg,avg[,2]-avg[,1])
+    colnames(avg) <- c(paste(compare.group,"AVG",sep="_"),"deltaBeta")
+    DMP <- data.frame(DMP[com.idx,],avg,probe.features[com.idx,])
+    
+    message("[<<<<<< ChAMP.DMP VARIATION ENDED, JUST AS ALL THINGS END IN LIFE >>>>>>]")
+    message("[===========================]")
+    
+  }else{
+    
+    myDMP_timecourse[[s]] <- champ.DMP(beta = beta_sub, 
+                                       pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
+                                       arraytype = "EPIC"   ) # call function
+  }
+  
 }
 
 # failing on the calculation of average value of EP, because it has only one column
