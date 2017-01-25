@@ -148,10 +148,14 @@ myDMR_peak <- champ.DMR(beta=beta_diffcells,pheno=design_peak$group,method="Bump
 myDMR_timecourse <- list()
 for(s in stages[2:length(stages)]){
   x = c("iPSC",s) # two stages to contrast
-  print(paste(" Testing contrast", x,sep=" ")) # message of progress
+  print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
   beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
-  myDMR_timecourse[[s]] <- champ.DMR(beta=beta_sub, maxGap=900, cores=4,
-                                pheno=design_timecourse[[s]]$group,method="Bumphunter",arraytype = "EPIC") # call function
+  myDMR_timecourse[[s]] <- champ.DMR(beta=beta_sub, 
+                                     maxGap=900, 
+                                     cores=4,
+                                     pheno=design_timecourse[[s]]$group,
+                                     method="Bumphunter",
+                                     arraytype = "EPIC") # call function
 }
 
 for(s in stages[2:length(stages)]){
@@ -160,4 +164,43 @@ for(s in stages[2:length(stages)]){
 
 DMR.GUI(DMR=myDMR_timecourse[["EN7"]],beta=beta_sub,pheno=design_timecourse$EN7$group,arraytype = "EPIC",runDMP = F) 
 # not doing what it's supposed to do
+
+
+# Differentially methylated probes
+
+
+# iPSC vs all others. Change for each peak test
+group_timecourse <- list()
+group_timecourse[["DE"]]=c(rep("iPSC",times=3),rep("DE",times=3),rep(0,times=15)) #DE vs iPSC
+group_timecourse[["PGT"]]=c(rep("iPSC",times=3),rep(0,times=3),rep("PGT",times=3),rep(0,times=12)) #PGT vs iPSC
+group_timecourse[["PFG"]]=c(rep("iPSC",times=3),rep(0,times=6),rep("PFG",times=3),rep(0,times=9)) #PFG vs iPSC
+group_timecourse[["PE"]]=c(rep("iPSC",times=3),rep(0,times=9),rep("PE",times=3),rep(0,times=6)) #PE vs iPSC
+group_timecourse[["EP"]]=c(rep("iPSC",times=3),rep(0,times=12),rep("EP",times=1),rep(0,times=5)) #EP vs iPSC. Just one sample, so not really diff meth
+group_timecourse[["EN6"]]=c(rep("iPSC",times=3),rep(0,times=13),rep("EN6",times=3),rep(0,times=2)) #EN vs iPSC
+group_timecourse[["EN7"]]=c(rep("iPSC",times=3),rep(0,times=16),rep("EN7",times=2)) #BLC vs iPSC
+
+# iPSC overmethylated regions are the undermethylated regions of the above 7
+
+design_timecourse= pD[1:21,c(3,4)]
+
+design_timecourse <- rep(list(design_timecourse),7)
+names(design_timecourse) = stages[2:length(stages)]
+for(s in stages[2:length(stages)]){
+  design_timecourse[[s]]$group=group_timecourse[[s]] # fil list of df with appropriate design
+  design_timecourse[[s]]=design_timecourse[[s]][design_timecourse[[s]]$group!=0,] # select only rows non 0 vals.
+  
+}
+
+myDMP_timecourse <- list()
+for(s in stages[2:length(stages)]){
+  x = c("iPSC",s) # two stages to contrast
+  print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
+  beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
+  myDMP_timecourse[[s]] <- champ.DMP(beta = beta_sub, 
+                     pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
+                     arraytype = "EPIC"   ) # call function
+}
+
+# failing on the calculation of average value of EP, because it has only one column
+# write exception for it, but don't trust (as without replicates there's no differential methylation!)
 
