@@ -5,11 +5,13 @@
 library(ChAMP)
 currentDate <- Sys.Date() # to save date in name of output files
 
-
+# load matrix of normalized beta values
 beta= read.csv( "/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/quantile_normalised_beta_detP_0.01_nocrossreact.csv", header=T,row.names = 1,check.names=F)
 
+# load matrix with sample information
 pD=read.csv("/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/samples_info.csv", header=T, row.names=1, check.names = F)
 
+stages=c("iPSC","DE","PGT","PFG","PE","EP","EN6","EN7")
 #############
 
 
@@ -27,10 +29,26 @@ design_peak=pD[1:21,c(3,4)]
 design_peak$group=group_peak
 
 # iPSC vs all others. Change for each peak test
+group_timecourse <- list()
+  group_timecourse[["DE"]]=c(rep(-1,times=3),rep(1,times=3),rep(0,times=15)) #DE vs iPSC
+  group_timecourse[["PGT"]]=c(rep(-1,times=3),rep(0,times=3),rep(1,times=3),rep(0,times=12)) #PGT vs iPSC
+  group_timecourse[["PFG"]]=c(rep(-1,times=3),rep(0,times=6),rep(1,times=3),rep(0,times=9)) #PFG vs iPSC
+  group_timecourse[["PE"]]=c(rep(-1,times=3),rep(0,times=9),rep(1,times=3),rep(0,times=6)) #PE vs iPSC
+  group_timecourse[["EP"]]=c(rep(-1,times=3),rep(0,times=12),rep(1,times=1),rep(0,times=5)) #EP vs iPSC. Just one sample, so not really diff meth
+  group_timecourse[["EN6"]]=c(rep(-1,times=3),rep(0,times=13),rep(1,times=3),rep(0,times=2)) #EN vs iPSC
+  group_timecourse[["EN7"]]=c(rep(-1,times=3),rep(0,times=16),rep(1,times=2)) #BLC vs iPSC
 
-group_timecourse=c(rep(-1,times=3),rep(1,times=3),rep(0,times=15)) #DE vs iPSC
+# iPSC overmethylated regions are the undermethylated regions of the above 7
+
 design_timecourse= pD[1:21,c(3,4)]
-design_timecourse$group=group_timecourse
+
+design_timecourse <- rep(list(design_timecourse),7)
+names(design_timecourse) = stages[2:length(stages)]
+for(s in stages[2:length(stages)]){
+  design_timecourse[[s]]$group=group_timecourse[[s]] # fil list of df with appropriate design
+  design_timecourse[[s]]=design_timecourse[[s]][design_timecourse[[s]]$group!=0,] # select only rows with -1 or 1. Check this is necessary
+  
+}
 
 # can I check contrasts in this way?? what about iPSC?
 
@@ -127,7 +145,19 @@ QC.GUI(CpG=rownames(beta_diffcells),arraytype="EPIC")
 myDMR_peak <- champ.DMR(beta=beta_diffcells,pheno=design_peak$group,method="Bumphunter",arraytype = "EPIC")
 
 # ChAMP only tests two groups. Ensure the comparisons are correct!
-myDMR_timecourse <- champ.DMR(beta=beta_diffcells[,c(1:6)],pheno=design_timecourse$group[1:6],method="Bumphunter",arraytype = "EPIC")
+myDMR_timecourse <- list()
+for(s in stages[2:length(stages)]){
+  x = c("iPSC",s) # two stages to contrast
+  print(paste(" Testing contrast", x,sep=" ")) # message of progress
+  beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
+  myDMR_timecourse[[s]] <- champ.DMR(beta=beta_sub, maxGap=900, cores=4,
+                                pheno=design_timecourse[[s]]$group,method="Bumphunter",arraytype = "EPIC") # call function
+}
 
-DMR.GUI(DMR=myDMR_timecourse,beta=beta_diffcells,pheno=design_timecourse$group,arraytype = "EPIC") # not doing what it's supposed to do
+for(s in stages[2:length(stages)]){
+ write.csv(myDMR_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp.csv",sep=""), col.names=T,row.names=T, quote=F)
+}
+
+DMR.GUI(DMR=myDMR_timecourse[["EN7"]],beta=beta_sub,pheno=design_timecourse$EN7$group,arraytype = "EPIC",runDMP = F) 
+# not doing what it's supposed to do
 
