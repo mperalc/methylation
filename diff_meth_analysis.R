@@ -159,14 +159,14 @@ for(s in stages[2:length(stages)]){
 }
 
 for(s in stages[2:length(stages)]){
- write.csv(myDMR_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp.csv",sep=""), col.names=T,row.names=T, quote=F)
+ write.csv(myDMR_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
 }
 
 DMR.GUI(DMR=myDMR_timecourse[["EN7"]],beta=beta_sub,pheno=design_timecourse$EN7$group,arraytype = "EPIC",runDMP = F) 
 # not doing what it's supposed to do
 
 
-# Differentially methylated probes
+######################### Differentially methylated probes#########################
 
 
 # iPSC vs all others. Change for each peak test
@@ -254,7 +254,7 @@ for(s in stages[2:length(stages)]){
     avg <- cbind(avg,avg[,2]-avg[,1])
     colnames(avg) <- c(paste(compare.group,"AVG",sep="_"),"deltaBeta")
     DMP <- data.frame(DMP[com.idx,],avg,probe.features[com.idx,])
-    
+    myDMP_timecourse[[s]] <- DMP 
     message("[<<<<<< ChAMP.DMP VARIATION ENDED, JUST AS ALL THINGS END IN LIFE >>>>>>]")
     message("[===========================]")
     
@@ -267,6 +267,207 @@ for(s in stages[2:length(stages)]){
   
 }
 
-# failing on the calculation of average value of EP, because it has only one column
-# write exception for it, but don't trust (as without replicates there's no differential methylation!)
+myDMP_timecourse_beta_forplots=myDMP_timecourse  # saving for plotting delta beta etc.
+
+
+
+
+################ now with M values
+
+
+for(s in stages[2:length(stages)]){
+  x = c("iPSC",s) # two stages to contrast
+  print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
+  beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
+  beta_sub[beta_sub<=0.001]<-0.001 # replacing extreme values
+  beta_sub[beta_sub>=0.999]<-0.999
+  
+  M <- log((beta_sub/(1-beta_sub)),2) # calculates M values
+  
+  M=as.matrix(M) # Y needs to be a matrix
+  
+  if(is.null(dim(beta_diffcells[ , grepl(x[2] , colnames( beta_diffcells ))]))){
+    # if second stage (not iPSC) only has one column, do this alternative version of champ.DMP
+    # Here there's no average beta value for each CpG in the stage with one sample, just its only beta value
+    # As there are not replicates, this is not a true differential methylation analysis. Hence the message:
+    message(paste("The stage",x[2],"has only one sample. Doing DMP variation, but do not trust results.",sep=" "))
+    message("[===========================]")
+    message("[<<<<< ChAMP.DMP VARIATION STARTING >>>>>]")
+    message("-----------------------------")
+    
+    ### setup
+    beta=M
+    pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s))
+    arraytype = "EPIC"
+    message(paste("The array type is",arraytype,sep=" "))
+    adjPVal = 0.05
+    message(paste("The adjusted p-val threshold to report is",adjPVal,sep=" "))
+    adjust.method = "BH"
+    message(paste("The adjustment method for multiple testing is",adjust.method,sep=" "))
+    
+    
+    #end of setup 
+    
+    message("\n<< Your pheno information contains following groups. >>")
+    sapply(unique(pheno),function(x) message("<",x,">:",sum(pheno==x)," samples."))
+    message("[The power of statistics analysis on groups contain very few samples may not be strong.]")
+    
+    message("You did not assign compare groups. The first two groups: <",unique(pheno)[1],"> and <",unique(pheno)[2],">, will be compared automatically.")
+    compare.group <- unique(pheno)[1:2]
+    
+    p <- pheno[which(pheno %in% compare.group)]
+    beta <- beta[,which(pheno %in% compare.group)]
+    design <- model.matrix( ~ 0 + p)
+    # contrast.matrix requires the initial groups from pheno to be recorded as factors, preferably names (for example, stages)
+    contrast.matrix <- makeContrasts(contrasts=paste(colnames(design)[2:1],collapse="-"), levels=colnames(design))
+    message("\n<< Contrast Matrix >>")
+    print(contrast.matrix)
+    
+    message("\n<< All beta, pheno and model are prepared successfully. >>")
+    
+    fit <- lmFit(beta, design)
+    fit2 <- contrasts.fit(fit,contrast.matrix)
+    tryCatch(fit3 <- eBayes(fit2),
+             warning=function(w) 
+             {
+               stop("limma failed, No sample variance.\n")
+             }) # if the contrast matrix is not correct, DMP function will fail here
+    
+    DMP <- topTable(fit3,coef=1,number=nrow(beta),adjust.method=adjust.method,p.value=adjPVal)
+    message("You have found ",sum(DMP$adj.P.Val <= adjPVal), " significant MVPs with a ",adjust.method," adjusted P-value below ", adjPVal,".")
+    message("\n<< Calculate DMP successfully. >>")
+    
+    if(arraytype == "EPIC") data(probe.features.epic) else data(probe.features)
+    com.idx <- intersect(rownames(DMP),rownames(probe.features))
+    avg <-  cbind(rowMeans(beta[com.idx,which(p==compare.group[1])]),beta[com.idx,which(p==compare.group[2])])
+    avg <- cbind(avg,avg[,2]-avg[,1])
+    colnames(avg) <- c(paste(compare.group,"AVG",sep="_"),"deltaBeta")
+    DMP <- data.frame(DMP[com.idx,],avg,probe.features[com.idx,])
+    myDMP_timecourse[[s]] <- DMP 
+    message("[<<<<<< ChAMP.DMP VARIATION ENDED, JUST AS ALL THINGS END IN LIFE >>>>>>]")
+    message("[===========================]")
+    
+  }else{
+    
+    myDMP_timecourse[[s]] <- champ.DMP(beta = M, 
+                                       pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
+                                       arraytype = "EPIC"   ) # call function
+  }
+  
+}
+
+# calculate deltaBeta (MethDiff in Jaffe's paper - 2016) for all contrasts and probes (for future plots)
+avg <- data.frame(matrix(nrow = nrow(beta_diffcells),ncol = 0))
+
+for(s in stages[1:length(stages)]){
+  
+  #get average beta for all samples in each stage
+  if(is.null(dim(beta_diffcells[,grepl(s, colnames( beta_diffcells ))]))){ #for stages with just one sample
+    avg[paste(s,"AVG",sep="-") ] <-  beta_diffcells[,grepl(s,colnames(beta_diffcells))] # not really average, because there's just one value per CpG
+    
+  }else{
+    avg[paste(s,"AVG",sep="-") ] <-  rowMeans(beta_diffcells[,grepl(s,colnames(beta_diffcells))])
+    
+  } 
+  if(s != "iPSC"){
+    
+    #if not iPSC stage, substract means to get deltaBeta for that second stage
+    avg <- cbind(avg,avg[,paste(s,"AVG",sep="-") ]-avg[,paste("iPSC","AVG",sep="-") ])
+    colnames(avg)[length(avg)] <- paste(s,"deltaBeta",sep="_")
+  }
+}
+
+rownames(avg) <- rownames(beta_diffcells) # add names of CpGs
+
+write.csv(avg,"/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/deltaBeta_allprobes.csv", col.names=T,row.names=T, quote=F)
+#save
+
+
+
+# merge AVG and deltaBeta values with the results of diff meth probes using M values
+
+myDMP_timecourse_merged <- lapply(myDMP_timecourse, "[", c(1:6,10:19)) # subset dataframes without AVG or deltaBeta
+myDMP_timecourse_beta_forplots=lapply(myDMP_timecourse_beta_forplots, "[", c(7:9))  # subset with AVG and deltaBeta
+
+
+for(s in stages[2:length(stages)]){
+  
+  myDMP_timecourse_merged[[s]] <- cbind(myDMP_timecourse_merged[[s]], myDMP_timecourse_beta_forplots[[s]][row.names(myDMP_timecourse_merged[[s]]),]) #merge by probes from M value df
+  
+}
+
+rm(myDMP_timecourse_beta_forplots,myDMP_timecourse)
+
+#save with all probes
+for(s in stages[2:length(stages)]){
+  write.csv(myDMP_timecourse_merged[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP/",s,"_timecourse_DMPs_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
+}
+
+
+
+
+
+
+
+
+################ get max logFC o all stages for each CpG: that will be its maximum value ##################
+###not sure if this is very relevant, as there is a threshold of methylation/not methylation
+
+
+### FIX THE FOLLOWING FOR MY DATA#####
+#take logFC and adj P values of each, and combine in single dataframe
+
+combined_df <- lapply(DE_list, "[", c(5,9))   # subsetting list of dataframes with columns I want
+
+combined_df <- do.call("cbind", combined_df)   # merging into one dataframe
+
+combined_df <- cbind(DE_list$stagesiPSC[,c(1,2,3,4)],combined_df)
+
+#get max conditions per gene
+maxVals <- apply(combined_df,1,function(x) which.max(x[c(5,7,9,11,13,15,17,19)]))
+
+#find significant genes per stage
+#rowsums checks that there's at least one positive logFC 
+# maxvals selects which one to take as max value for each stage
+DE_stages<-list()  
+
+sig_iPSC_stage <- combined_df[combined_df$stagesiPSC.adj.P.Val < 0.01 & maxVals == 1,c(1:6)]
+sig_iPSC_stage=sig_iPSC_stage[order(sig_iPSC_stage[6]),] #order by adj p values
+rownames(sig_iPSC_stage)=NULL # take out row names
+DE_stages [["iPSC"]]<-sig_iPSC_stage
+
+sig_DE_stage <- combined_df[combined_df$stagesDE.adj.P.Val < 0.01 &  maxVals == 2, c(1:4,7,8) ]
+sig_DE_stage=sig_DE_stage[order(sig_DE_stage[6]),]
+rownames(sig_DE_stage)=NULL 
+DE_stages [["DE"]]<-sig_DE_stage
+
+sig_PGT_stage <- combined_df[ combined_df$stagesPGT.adj.P.Val < 0.01 & maxVals == 3,c(1:4,9,10)  ]
+sig_PGT_stage=sig_PGT_stage[order(sig_PGT_stage[6]),]
+rownames(sig_PGT_stage)=NULL 
+DE_stages [["PGT"]]<-sig_PGT_stage
+
+sig_PFG_stage <- combined_df[ combined_df$stagesPFG.adj.P.Val < 0.01 & maxVals == 4, c(1:4,11,12) ]
+sig_PFG_stage=sig_PFG_stage[order(sig_PFG_stage[6]),]
+rownames(sig_PFG_stage)=NULL 
+DE_stages [["PFG"]]<-sig_PFG_stage
+
+sig_PE_stage <- combined_df[ combined_df$stagesPE.adj.P.Val < 0.01 & maxVals == 5,c(1:4,13,14)  ]
+sig_PE_stage=sig_PE_stage[order(sig_PE_stage[6]),]
+rownames(sig_PE_stage)=NULL 
+DE_stages [["PE"]]<-sig_PE_stage
+
+sig_EP_stage <- combined_df[ combined_df$stagesEP.adj.P.Val < 0.01 & maxVals == 6, c(1:4,15,16)  ]
+sig_EP_stage=sig_EP_stage[order(sig_EP_stage[6]),]
+rownames(sig_EP_stage)=NULL 
+DE_stages [["EP"]]<-sig_EP_stage
+
+sig_EN6_stage <- combined_df[ combined_df$stagesEN6.adj.P.Val < 0.01 & maxVals == 7, c(1:4,17,18) ]
+sig_EN6_stage=sig_EN6_stage[order(sig_EN6_stage[6]),]
+rownames(sig_EN6_stage)=NULL 
+DE_stages [["EN6"]]<-sig_EN6_stage
+
+sig_EN7_stage <- combined_df[ combined_df$stagesEN7.adj.P.Val < 0.01 & maxVals == 8,c(1:4,19,20)  ]
+sig_EN7_stage=sig_EN7_stage[order(sig_EN7_stage[6]),]
+rownames(sig_EN7_stage)=NULL 
+DE_stages [["EN7"]]<-sig_EN7_stage
 
