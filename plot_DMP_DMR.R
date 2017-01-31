@@ -12,8 +12,8 @@ library(gtable)
 
 ############### region to plot ##########33
 
-region <- c(7, 5380000,5392500)  # Chr, position start, position finish
-timecourse_stage = "DE"  # stage from timecourse to plot (meth values compared to iPSC stage)
+region <- c(10, 114682578,114902005)  # Chr, position start, position finish
+timecourse_stage = "PFG"  # stage from timecourse to plot (meth values compared to iPSC stage)
 
 ######### read in files ########
 
@@ -60,7 +60,9 @@ plot_betas$variable=gsub( "-.*$", "", plot_betas$variable) # take out everything
 
 ###check meaning of columns in DMR!!!!
 #fix condition to select specific row
-if(DMR_timecourse[[timecourse_stage]]$BumphunterDMR.value>0){  # selecting colour of segment based on over/under methylation. CHANGE!!
+selected_DMR=DMR_timecourse[[timecourse_stage]][which(DMR_timecourse[[timecourse_stage]]$BumphunterDMR.seqnames==paste("chr",region[1],sep="") & DMR_timecourse[[timecourse_stage]]$BumphunterDMR.start > region[2] & DMR_timecourse[[timecourse_stage]]$BumphunterDMR.end < region[3]),]
+
+if(selected_DMR$BumphunterDMR.value>0){  # selecting colour of segment based on over/under methylation. CHANGE!!
   color_DMR <- "red" #over-methylated in red
 }else{ #under-methylated in blue
   color_DMR <- "blue"
@@ -69,19 +71,23 @@ if(DMR_timecourse[[timecourse_stage]]$BumphunterDMR.value>0){  # selecting colou
 
 scaleFUN <- function(x) sprintf("%.1f", x)  # to round y axis to 1 decimal place
 
-plot_betas$col <- ifelse(plot_betas$variable=="iPSC", "black", "green") # add color column conditionally
 
-p1 <- ggplot(plot_betas, aes(x = MAPINFO,y=value,group=variable)) +
-  geom_segment(show.legend = F,aes(x=5388781,xend=5391498,y=0,yend=0)) + #,col=color_DMR) + #fix coordinates +
-  geom_point(stat="identity",aes(colour=col)) +
-  scale_colour_identity() +
-  scale_y_continuous(labels=scaleFUN) +
-  
-  # scale_color_manual(values =factor(c("#E69F00","#999999",
-  #                              "#FF0000"),levels=c("#E69F00","#999999",
-  #                                                  "#FF0000")),labels=factor(c("DE","iPSC",color_DMR),levels=c("DE","iPSC",color_DMR))) +
-  #                    #           ifelse(color_DMR=="over-methylated","#F43431","#2CD0FC")),
-  #                    # labels=c("DE","iPSC",color_DMR))+
+
+library(RColorBrewer)
+myColors <- brewer.pal(8,"Set2") # select colors from pallette
+myColors <- myColors[c(1,8)] # green and dark grey
+names(myColors) <- levels(plot_betas$variable) # assign levels ("stage x" and "iPSC")
+colScale <- scale_colour_manual(name = "variable",values = myColors)
+
+p1 <- ggplot(plot_betas, aes(x = MAPINFO,y=value,group=variable)) 
+
+  if(nrow(selected_DMR)!=0){
+   p1 <- p1 + geom_segment(show.legend = F,aes(x=selected_DMR$BumphunterDMR.start,xend=selected_DMR$BumphunterDMR.end,y=0,yend=0),col=color_DMR)  # color outside aes doesn't include it in legend
+  }
+
+p1 <- p1 + geom_point(aes(col=variable)) + # this with colScale sets colors to variables and includes in label
+   colScale +
+ scale_y_continuous(labels=scaleFUN) +  # rounding y axis
   ggtitle("DMR") +
   xlab (paste("Location in chr",region[1],sep=" ")) +
   ylab ("Beta value") +
@@ -108,9 +114,78 @@ g_legend<-function(a.gplot){
 # 
  p1 <- p1 + theme(legend.position="none")
 
-####wrong colors!!!
 
-#Data for second plot (deltabeta)
+ 
+ ### add gene annotation
+ 
+ library(Homo.sapiens)
+ genes(TxDb.Hsapiens.UCSC.hg19.knownGene)
+ library(dplyr)
+ library(biomaRt)
+ 
+ # region = c(paste("chr", region[1], sep=""),region[2:3])  # add prefix
+ # 
+ # mycoords.gr = as.data.frame(matrix(region,ncol=3, byrow=T))  
+ # mycoords.gr = select(mycoords.gr,chrom=V1, start=V2, end=V3) # change names of columns
+ # mycoords.gr=makeGRangesFromDataFrame(mycoords.gr)  # create GRanges object
+ # gene_regions=subsetByOverlaps(genes(TxDb.Hsapiens.UCSC.hg19.knownGene), mycoords.gr)
+ 
+ ensembl = useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice" ,dataset="hsapiens_gene_ensembl") 
+ # I use genome coordinates from GRCh37 (not GRCh38, which is the latest release). Keep that in mind.
+ 
+ 
+ 
+ chr.region=paste(region, collapse = ":")
+ filterlist <- list(chr.region,"protein_coding","lincRNA")  
+ 
+ 
+ 
+ results <- getBM(attributes = c('ensembl_gene_id','entrezgene', 'external_gene_name', 'gene_biotype', 'chromosome_name', "start_position", "end_position"),
+                  filters = c("chromosomal_region","biotype"),values = filterlist, mart = ensembl)
+ 
+ # plot white y axis
+ # plot white dots
+ # plot geom segment as results or as region,  depending on whether it starts or ends outside plotting region
+ 
+ myColors <- brewer.pal(8,"Dark2") # select colors from pallette
+ myColors <- myColors 
+ names(myColors) <- levels(results$external_gene_name) # assign levels ("stage x" and "iPSC")
+ colScale <- scale_colour_manual(name = "external_gene_name",values = myColors)
+ 
+ p2 <-   ggplot(plot_betas, aes(x = MAPINFO,y=value)) + geom_point(col="white") + colScale
+          
+   
+    values <- c(1, nrow(results))   # how many genes do I have
+ for (i in values) {  # sequentially plot new genes. Doesn't work for more than 8
+   p2 <- p2 + geom_segment(data=results[i,], 
+                           show.legend = T,
+                           aes(x=min(plot_betas$MAPINFO),xend=max(plot_betas$MAPINFO), 
+                               y=(mean(plot_betas$value)*sin(i/4))+0.1,yend=(mean(plot_betas$value)*sin(i/4))+0.1, # oscilate around 0.5
+                               col=external_gene_name)) 
+              
+    }
+   
+  p2 <- p2 + ylab ("Genes") +
+         scale_y_continuous(labels=scaleFUN) +  # rounding y axis
+         expand_limits(y = c(0,1)) +
+         theme_bw() + 
+         theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
+         panel.border=element_blank(),axis.text.y=element_text(size=12,face="bold",colour="white"),
+         axis.title.x = element_blank(), axis.text.x =element_blank(),
+         axis.ticks.y = element_blank(),axis.title.y=element_text(size=14,face="bold"),
+         plot.title = element_text(size=16,face="bold"),
+         legend.text = element_text(size=11,face="bold"),legend.title = element_blank(),
+         legend.position = "bottom",legend.direction = "horizontal",
+         legend.background = element_blank(),legend.key=element_blank(),
+         legend.box.background=element_blank(),legend.margin=unit(-0.5, "cm"),
+         legend.key.width = unit(0.5, "cm") ) 
+ 
+   
+   mylegend2<-g_legend(p2)
+   # 
+  
+ 
+#Data for deltabeta
 plot_deltabeta=deltaBetas[ ,grepl(timecourse_stage, colnames(deltaBetas))] # subset beta on iPSC and the stage selected
 
 plot_deltabeta = cbind(plot_deltabeta ,beta_sub[7:11]) # join location of probes and deltabeta for selected stage
@@ -130,9 +205,7 @@ if(min(plot_deltabeta[1])<=-0.1){
   }
 
 
-
-
-p2 <- ggplot(plot_deltabeta, aes(x = MAPINFO,y=deltaBeta)) + geom_line() + theme_minimal() + 
+p3 <- ggplot(plot_deltabeta, aes(x = MAPINFO,y=deltaBeta)) + geom_line() + theme_minimal() + 
   xlab (paste("Location in chr",region[1],sep=" ")) +
   ylab ("delta Beta") +
 
@@ -145,31 +218,22 @@ p2 <- ggplot(plot_deltabeta, aes(x = MAPINFO,y=deltaBeta)) + geom_line() + theme
   theme(axis.text=element_text(size=12,face="bold"),
   axis.title=element_text(size=14,face="bold"))
 
-p3 <- grid.arrange(arrangeGrob(p1 + theme(legend.position="none"),ncol=1),
+ 
+
+
+# merge all plots
+if(nrow(results)<=3){
+  size_p2=1.5
+}else{
+  size_p2=3
+}
+p4 <- grid.arrange(arrangeGrob(p1 + theme(legend.position="none"),ncol=1),
                    arrangeGrob(p2 + theme(legend.position="none"),ncol=1),
-                   arrangeGrob(mylegend,ncol=1), nrow=3,heights=c(7,3,1))   
+                   arrangeGrob(p3 + theme(legend.position="none"),ncol=1),
+                   arrangeGrob(mylegend,mylegend2,ncol=2),
+                   nrow=4,heights=c(7,size_p2,3,1))   
 
+# table with DMPs
 
-
-
-# using grid.draw
-grid.newpage()
-grid.draw(rbind(ggplotGrob(p1), ggplotGrob(p2),size="first"))    # this works
-
-
-
-# other version using gtable:
-
-g1 <- ggplotGrob(p1)
-g2 <- ggplotGrob(p2)
-
-
-## merge, basing widths on g1
-g <- gtable:::rbind_gtable(g1, g2, "first")
-g <- gtable_add_rows(g, unit(-0.5,"cm"), pos=nrow(g1)) # no spacing
-grid.newpage()
-grid.draw(g)
-
-
-
+selected_DMP=DMP_timecourse[[timecourse_stage]][which(DMP_timecourse[[timecourse_stage]]$CHR==region[1] & DMP_timecourse[[timecourse_stage]]$MAPINFO > region[2] & DMP_timecourse[[timecourse_stage]]$MAPINFO < region[3]),]
 
