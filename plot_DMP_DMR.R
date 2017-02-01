@@ -9,49 +9,62 @@ library(reshape2)
 library(grid)
 library(gridExtra)
 library(gtable)
+library(ChAMPdata)
+library(digest)
 
-############### region to plot ##########33
+currentDate <- Sys.Date() # to save date in name of output files
 
-region <- c(10, 114682578,114902005)  # Chr, position start, position finish
-timecourse_stage = "PFG"  # stage from timecourse to plot (meth values compared to iPSC stage)
 
-######### read in files ########
-
+################################## read in files #############################
+# beta values for all probes
+beta= read.csv( "/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/quantile_normalised_beta_detP_0.01_nocrossreact.csv", header=T,row.names = 1,check.names=F)
 # deltaBeta values of all probes (stage (n) - iPSC), and beta values averages for every stage
 deltaBetas <- as.data.frame(read_csv(file="/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/deltaBeta_allprobes.csv"))
 rownames(deltaBetas) <- deltaBetas$X1
 deltaBetas = deltaBetas[2:ncol(deltaBetas)]
 
-# beta values for all probes
-
-beta= read.csv( "/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/quantile_normalised_beta_detP_0.01_nocrossreact.csv", header=T,row.names = 1,check.names=F)
-x = c("iPSC",timecourse_stage) # two stages to subset
-beta_sub=beta[ , grepl(paste(x, collapse = "|") , colnames(beta) ) ] # subset beta on iPSC and the stage selected
-
 ## probe features
-library(ChAMPdata)
+
 data(probe.features.epic)
-beta_sub = cbind(beta_sub,probe.features[rownames(beta_sub),c("CHR","MAPINFO","gene","feature","cgi")]) # get relevant info from probes
 
 
 stages=c("iPSC","DE","PGT","PFG","PE","EP","EN6","EN7")
+
+# DMR and DMP info for all stages
 
 DMR_timecourse <- list()
 DMP_timecourse <- list()
 
 for(s in stages[2:length(stages)]){
- DMR_timecourse[[s]]<- as.data.frame(read_csv(file=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp.csv",sep="")))
- rownames(DMR_timecourse[[s]]) <- DMR_timecourse[[s]]$X1
- DMR_timecourse[[s]] = DMR_timecourse[[s]][2:ncol(DMR_timecourse[[s]])]
- }
+  DMR_timecourse[[s]]<- as.data.frame(read_csv(file=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp.csv",sep="")))
+  rownames(DMR_timecourse[[s]]) <- DMR_timecourse[[s]]$X1
+  DMR_timecourse[[s]] = DMR_timecourse[[s]][2:ncol(DMR_timecourse[[s]])]
+}
 
 for(s in stages[2:length(stages)]){
   DMP_timecourse[[s]]<- as.data.frame(read_csv(file=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP/",s,"_timecourse_DMPs_2017-01-27.csv",sep="")))
   rownames(DMP_timecourse[[s]]) <- DMP_timecourse[[s]]$X1
   DMP_timecourse[[s]] = DMP_timecourse[[s]][2:ncol(DMP_timecourse[[s]])]
-  }
+}
 
-#################
+
+
+#######################
+############### region to plot ##########
+
+region <- c(11, 2450360,2540221)  # Chr, position start, position finish
+timecourse_stage = "EN7"  # stage from timecourse to plot (meth values compared to iPSC stage)
+
+
+
+######### to re-run with each change of region ########
+
+
+x = c("iPSC",timecourse_stage) # two stages to subset
+beta_sub=beta[ , grepl(paste(x, collapse = "|") , colnames(beta) ) ] # subset beta on iPSC and the stage selected
+
+beta_sub = cbind(beta_sub,probe.features[rownames(beta_sub),c("CHR","MAPINFO","gene","feature","cgi")]) # get relevant info from probes
+
 
 #Data for first plot (probes and DMR segment)
 plot_betas=beta_sub[which(beta_sub$CHR == region[1] & beta_sub$MAPINFO > region[2] & beta_sub$MAPINFO < region[3]) , ]
@@ -88,7 +101,7 @@ p1 <- ggplot(plot_betas, aes(x = MAPINFO,y=value,group=variable))
 p1 <- p1 + geom_point(aes(col=variable)) + # this with colScale sets colors to variables and includes in label
    colScale +
  scale_y_continuous(labels=scaleFUN) +  # rounding y axis
-  ggtitle("DMR") +
+  ggtitle(paste("DMR",timecourse_stage,"vs iPSC",sep=" ")) +
   xlab (paste("Location in chr",region[1],sep=" ")) +
   ylab ("Beta value") +
   expand_limits(y = c(0,1)) +
@@ -111,24 +124,16 @@ g_legend<-function(a.gplot){
   return(legend)}
 # 
  mylegend<-g_legend(p1)
-# 
- p1 <- p1 + theme(legend.position="none")
+ 
 
 
  
  ### add gene annotation
  
  library(Homo.sapiens)
- genes(TxDb.Hsapiens.UCSC.hg19.knownGene)
+ 
  library(dplyr)
  library(biomaRt)
- 
- # region = c(paste("chr", region[1], sep=""),region[2:3])  # add prefix
- # 
- # mycoords.gr = as.data.frame(matrix(region,ncol=3, byrow=T))  
- # mycoords.gr = select(mycoords.gr,chrom=V1, start=V2, end=V3) # change names of columns
- # mycoords.gr=makeGRangesFromDataFrame(mycoords.gr)  # create GRanges object
- # gene_regions=subsetByOverlaps(genes(TxDb.Hsapiens.UCSC.hg19.knownGene), mycoords.gr)
  
  ensembl = useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice" ,dataset="hsapiens_gene_ensembl") 
  # I use genome coordinates from GRCh37 (not GRCh38, which is the latest release). Keep that in mind.
@@ -143,6 +148,17 @@ g_legend<-function(a.gplot){
  results <- getBM(attributes = c('ensembl_gene_id','entrezgene', 'external_gene_name', 'gene_biotype', 'chromosome_name', "start_position", "end_position"),
                   filters = c("chromosomal_region","biotype"),values = filterlist, mart = ensembl)
  
+ results_refseqmRNA <- getBM(attributes=c('refseq_mrna','external_gene_name',"chromosome_name","transcript_start","transcript_end","transcription_start_site"), filters = c("chromosomal_region","biotype"), values = filterlist, mart = ensembl)
+ 
+ results_refseqmRNA[which(results_refseqmRNA$refseq_mrna==""),1] <- NA   # changing empty vectors of first column to NA, to remove them later
+ 
+ results_refseqmRNA=results_refseqmRNA[which(!is.na(results_refseqmRNA$refseq_mrna)),]  # taking out non refseq mrnas
+ 
+ tss=unique(results_refseqmRNA$transcript_start)  # one for each gene
+ 
+ ##########fix this tss thing
+ 
+ 
  # plot white y axis
  # plot white dots
  # plot geom segment as results or as region,  depending on whether it starts or ends outside plotting region
@@ -155,13 +171,16 @@ g_legend<-function(a.gplot){
  p2 <-   ggplot(plot_betas, aes(x = MAPINFO,y=value)) + geom_point(col="white") + colScale
           
    
-    values <- c(1, nrow(results))   # how many genes do I have
- for (i in values) {  # sequentially plot new genes. Doesn't work for more than 8
+    values <- nrow(results)   # how many genes do I have
+ for (i in 1:values) {  # sequentially plot new genes. Doesn't work for more than 8
    p2 <- p2 + geom_segment(data=results[i,], 
                            show.legend = T,
-                           aes(x=min(plot_betas$MAPINFO),xend=max(plot_betas$MAPINFO), 
-                               y=(mean(plot_betas$value)*sin(i/4))+0.1,yend=(mean(plot_betas$value)*sin(i/4))+0.1, # oscilate around 0.5
-                               col=external_gene_name)) 
+                           x=results[i,6],xend=results[i,7], 
+                           y=(mean(plot_betas$value)*sin(i/4))+0.1,yend=(mean(plot_betas$value)*sin(i/4))+0.1,  # oscilate around 0.5
+                           aes(col=external_gene_name)) +
+     geom_segment(show.legend = F,x=tss,xend=tss+10,
+                  y=(mean(plot_betas$value)*sin(i/4))+0.1-0.08,yend=(mean(plot_betas$value)*sin(i/4))+0.1+0.08)  # making a tick
+            
               
     }
    
@@ -188,7 +207,7 @@ g_legend<-function(a.gplot){
 #Data for deltabeta
 plot_deltabeta=deltaBetas[ ,grepl(timecourse_stage, colnames(deltaBetas))] # subset beta on iPSC and the stage selected
 
-plot_deltabeta = cbind(plot_deltabeta ,beta_sub[7:11]) # join location of probes and deltabeta for selected stage
+plot_deltabeta = cbind(plot_deltabeta ,beta_sub[,(ncol(beta_sub)-4):ncol(beta_sub)]) # join location of probes and deltabeta for selected stage
 plot_deltabeta=plot_deltabeta[which(plot_deltabeta$CHR == region[1] & plot_deltabeta$MAPINFO > region[2] & plot_deltabeta$MAPINFO < region[3]) ,]
 plot_deltabeta=plot_deltabeta[,c(2:ncol(plot_deltabeta))]
 colnames(plot_deltabeta)[1]="deltaBeta"  
@@ -196,44 +215,78 @@ colnames(plot_deltabeta)[1]="deltaBeta"
 #dynamic limits:
 #if max deltabeta of the region >0.1, pick max=(max + 0.1) and min -0.15
 # if min deltabeta <-0.1, pick min=(min -0.1) and max 0.15
-limits_deltabeta=c(-0.2,0.2)
-if(max(plot_deltabeta[1])>=0.1){
-  limits_deltabeta[2]=max(plot_deltabeta[1]) + 0.1
-  }
-if(min(plot_deltabeta[1])<=-0.1){
-  limits_deltabeta[1]=min(plot_deltabeta[1]) - 0.1
-  }
+limits_deltabeta=c(-1.0,1.0)
+# if(max(plot_deltabeta[1])>=0.1){
+#   limits_deltabeta[2]=max(plot_deltabeta[1]) + 0.1
+#   }
+# if(min(plot_deltabeta[1])<=-0.1){
+#   limits_deltabeta[1]=min(plot_deltabeta[1]) - 0.1
+#   }
 
 
 p3 <- ggplot(plot_deltabeta, aes(x = MAPINFO,y=deltaBeta)) + geom_line() + theme_minimal() + 
   xlab (paste("Location in chr",region[1],sep=" ")) +
   ylab ("delta Beta") +
-
   scale_y_continuous(labels=scaleFUN) +
   expand_limits(y = limits_deltabeta) +
   geom_hline(yintercept=0,linetype="dashed",size=0.1) +
   geom_hline(yintercept=0.1,col="red",size=0.1) +
-  geom_hline(yintercept=0.1,col="red",size=0.1) +
-  
-  theme(axis.text=element_text(size=12,face="bold"),
-  axis.title=element_text(size=14,face="bold"))
+  geom_hline(yintercept=-0.1,col="red",size=0.1) +
+  theme_bw() +
+  theme(axis.text=element_text(size=9.50,face="bold"),  # need slightly smaller text on y axis to compensate for the space taken by the "-"
+        panel.border=element_rect(size=2,colour = "white"),  # otherwise the ticks on the x axis of all plots will be misaligned
+        axis.title=element_text(size=14,face="bold"))
 
+   
+        
+        
  
 
 
 # merge all plots
 if(nrow(results)<=3){
-  size_p2=1.5
+  size_p2=1.2
 }else{
-  size_p2=3
+  size_p2=2.2
 }
+
 p4 <- grid.arrange(arrangeGrob(p1 + theme(legend.position="none"),ncol=1),
                    arrangeGrob(p2 + theme(legend.position="none"),ncol=1),
                    arrangeGrob(p3 + theme(legend.position="none"),ncol=1),
                    arrangeGrob(mylegend,mylegend2,ncol=2),
-                   nrow=4,heights=c(7,size_p2,3,1))   
+                   nrow=4,heights=c(7,size_p2,4.5,1)) 
+
+# blank grob? blank<-rectGrob(gp=gpar(col="white"))
+
+ggsave(plot = p4,
+       device="png",
+       filename = paste("/Users/Marta/Documents/WTCHG/DPhil/Plots/Methylation_EPIC/DMR_and_DMP_timecourse_iPSC_vs", timecourse_stage,
+                        paste(results$external_gene_name, collapse = "_"),
+                        currentDate,".png",sep="_"),
+       width = 18, height = 6, units = "in",
+       dpi = 400)
+
 
 # table with DMPs
 
 selected_DMP=DMP_timecourse[[timecourse_stage]][which(DMP_timecourse[[timecourse_stage]]$CHR==region[1] & DMP_timecourse[[timecourse_stage]]$MAPINFO > region[2] & DMP_timecourse[[timecourse_stage]]$MAPINFO < region[3]),]
+capture.output(selected_DMP, 
+               file=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP_timecourse_iPSC_vs",timecourse_stage,
+                          paste(results$external_gene_name, collapse = "_"),
+                          currentDate,".txt",sep="_")) # to be able to check SNPs
 
+# taking out SNPs column, that makes the .csv file unreadable
+
+selected_DMP2=selected_DMP[,c(1:15,17:19)]
+
+write.csv(selected_DMP2,
+          paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP_timecourse_iPSC_vs",timecourse_stage,
+                paste(results$external_gene_name, collapse = "_"),
+                currentDate,".csv",sep="_"),
+          row.names=T, quote=F)
+
+write.csv(selected_DMP,
+          paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP_timecourse_iPSC_vs",timecourse_stage,
+                paste(results$external_gene_name, collapse = "_"),
+                currentDate,"plusSNPs.csv",sep="_"),
+          row.names=T, quote=F)
