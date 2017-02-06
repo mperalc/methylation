@@ -52,8 +52,16 @@ for(s in stages[2:length(stages)]){
 #######################
 ############### region to plot ##########
 
-region <- c(11, 2450360,2540221)  # Chr, position start, position finish
-timecourse_stage = "EN7"  # stage from timecourse to plot (meth values compared to iPSC stage)
+region <- c(15, 25068791,25223879)  # Chr, position start, position finish
+
+message("--------------------------------------------------")
+message("---------------STARTING ANALYSIS------------------")
+message("--------------------------------------------------")
+
+
+# timecourse_stage="EN7"
+for(timecourse_stage in stages[2:length(stages)]){  # stage from timecourse to plot (meth values compared to iPSC stage)
+
 
 
 
@@ -61,34 +69,47 @@ timecourse_stage = "EN7"  # stage from timecourse to plot (meth values compared 
 
 
 x = c("iPSC",timecourse_stage) # two stages to subset
+
+message(paste("---------------", x[1]," vs ", x[2], "------------------",sep=""))
+
 beta_sub=beta[ , grepl(paste(x, collapse = "|") , colnames(beta) ) ] # subset beta on iPSC and the stage selected
 
 beta_sub = cbind(beta_sub,probe.features[rownames(beta_sub),c("CHR","MAPINFO","gene","feature","cgi")]) # get relevant info from probes
 
+message("---------------Selecting probes------------------")
 
 #Data for first plot (probes and DMR segment)
 plot_betas=beta_sub[which(beta_sub$CHR == region[1] & beta_sub$MAPINFO > region[2] & beta_sub$MAPINFO < region[3]) , ]
 plot_betas=melt(plot_betas,id.vars = c("CHR","MAPINFO","gene","feature","cgi") )
 plot_betas$variable=gsub( "-.*$", "", plot_betas$variable) # take out everything after "-" (sample name)
+plot_betas$variable=factor(plot_betas$variable,levels=c("iPSC",timecourse_stage))
 
 ###check meaning of columns in DMR!!!!
 #fix condition to select specific row
-selected_DMR=DMR_timecourse[[timecourse_stage]][which(DMR_timecourse[[timecourse_stage]]$BumphunterDMR.seqnames==paste("chr",region[1],sep="") & DMR_timecourse[[timecourse_stage]]$BumphunterDMR.start > region[2] & DMR_timecourse[[timecourse_stage]]$BumphunterDMR.end < region[3]),]
+message("---------------selecting DMRs------------------")
 
-if(selected_DMR$BumphunterDMR.value>0){  # selecting colour of segment based on over/under methylation. CHANGE!!
-  color_DMR <- "red" #over-methylated in red
-}else{ #under-methylated in blue
-  color_DMR <- "blue"
-  
+selected_DMR=DMR_timecourse[[timecourse_stage]][which(DMR_timecourse[[timecourse_stage]]$BumphunterDMR.seqnames==paste("chr",region[1],sep="") & DMR_timecourse[[timecourse_stage]]$BumphunterDMR.start > region[2] & DMR_timecourse[[timecourse_stage]]$BumphunterDMR.end < region[3]),]
+if(nrow(selected_DMR)==0){
+  message("---------------no DMRs found------------------")
+ 
+}else{
+  if(selected_DMR$BumphunterDMR.value>0){  # selecting colour of segment based on over/under methylation. 
+    message("---------------found overmethylated region------------------")
+    color_DMR <- "red" #over-methylated in red
+  }else{ #under-methylated in blue
+    message("---------------found undermethylated region------------------")
+    color_DMR <- "blue"
+  }
 }
+
+message("---------------Plotting probes------------------")
+
 
 scaleFUN <- function(x) sprintf("%.1f", x)  # to round y axis to 1 decimal place
 
-
-
 library(RColorBrewer)
 myColors <- brewer.pal(8,"Set2") # select colors from pallette
-myColors <- myColors[c(1,8)] # green and dark grey
+myColors <- myColors[c(8,1)] # green and dark grey
 names(myColors) <- levels(plot_betas$variable) # assign levels ("stage x" and "iPSC")
 colScale <- scale_colour_manual(name = "variable",values = myColors)
 
@@ -127,6 +148,7 @@ g_legend<-function(a.gplot){
  
 
 
+ message("---------------adding gene annotation------------------")
  
  ### add gene annotation
  
@@ -141,47 +163,64 @@ g_legend<-function(a.gplot){
  
  
  chr.region=paste(region, collapse = ":")
- filterlist <- list(chr.region,"protein_coding","lincRNA")  
+ filterlist <- list(chr.region)  
  
  
  
- results <- getBM(attributes = c('ensembl_gene_id','entrezgene', 'external_gene_name', 'gene_biotype', 'chromosome_name', "start_position", "end_position"),
-                  filters = c("chromosomal_region","biotype"),values = filterlist, mart = ensembl)
+ results <- getBM(attributes = c('ensembl_gene_id','entrezgene', 'external_gene_name', 'gene_biotype', 'chromosome_name', "start_position", "end_position","transcription_start_site"),
+                  filters = c("chromosomal_region"),values = filterlist, mart = ensembl)
  
- results_refseqmRNA <- getBM(attributes=c('refseq_mrna','external_gene_name',"chromosome_name","transcript_start","transcript_end","transcription_start_site"), filters = c("chromosomal_region","biotype"), values = filterlist, mart = ensembl)
+ # results_refseqmRNA <- getBM(attributes=c('refseq_mrna','external_gene_name',"chromosome_name","transcript_start","transcript_end","transcription_start_site"), filters = c("chromosomal_region","biotype"), values = filterlist, mart = ensembl)
+ # 
+ # results_refseqmRNA[which(results_refseqmRNA$refseq_mrna==""),1] <- NA   # changing empty vectors of first column to NA, to remove them later
+ # 
+ # results_refseqmRNA=results_refseqmRNA[which(!is.na(results_refseqmRNA$refseq_mrna)),]  # taking out non refseq mrnas
+ # 
+ # tss=unique(results_refseqmRNA$transcript_start)  
  
- results_refseqmRNA[which(results_refseqmRNA$refseq_mrna==""),1] <- NA   # changing empty vectors of first column to NA, to remove them later
+ ####### if it throws errors of aesthetics, reduce gene size:  ##############
  
- results_refseqmRNA=results_refseqmRNA[which(!is.na(results_refseqmRNA$refseq_mrna)),]  # taking out non refseq mrnas
+ results=results[which(results$external_gene_name=="SNRPN"),]
  
- tss=unique(results_refseqmRNA$transcript_start)  # one for each gene
+ ##################
  
- ##########fix this tss thing
- 
+ results$external_gene_name=as.factor(results$external_gene_name)
+ results_tss <- melt(results[c(3,8)])
+ results_tss <- unique(results_tss)
+ results_tss_list <- split(results_tss, results_tss$external_gene_name) # make a list for each gene
+
+ message("---------------plotting genes------------------")
  
  # plot white y axis
  # plot white dots
  # plot geom segment as results or as region,  depending on whether it starts or ends outside plotting region
  
+ 
  myColors <- brewer.pal(8,"Dark2") # select colors from pallette
- myColors <- myColors 
  names(myColors) <- levels(results$external_gene_name) # assign levels ("stage x" and "iPSC")
  colScale <- scale_colour_manual(name = "external_gene_name",values = myColors)
  
  p2 <-   ggplot(plot_betas, aes(x = MAPINFO,y=value)) + geom_point(col="white") + colScale
           
    
-    values <- nrow(results)   # how many genes do I have
- for (i in 1:values) {  # sequentially plot new genes. Doesn't work for more than 8
-   p2 <- p2 + geom_segment(data=results[i,], 
-                           show.legend = T,
-                           x=results[i,6],xend=results[i,7], 
-                           y=(mean(plot_betas$value)*sin(i/4))+0.1,yend=(mean(plot_betas$value)*sin(i/4))+0.1,  # oscilate around 0.5
-                           aes(col=external_gene_name)) +
-     geom_segment(show.legend = F,x=tss,xend=tss+10,
-                  y=(mean(plot_betas$value)*sin(i/4))+0.1-0.08,yend=(mean(plot_betas$value)*sin(i/4))+0.1+0.08)  # making a tick
-            
-              
+    values <- length(unique(results$external_gene_name))   # how many genes do I have
+    n=1  # count for the location of the lines
+    for (i in unique(results$external_gene_name)) {  # sequentially plot new genes. Doesn't work for more than 8
+      p2 <- p2 + geom_segment(data=results[which(results$external_gene_name==i),], 
+                              show.legend = T,
+                              x=unique(results[which(results$external_gene_name==i),6]),
+                              xend=unique(results[which(results$external_gene_name==i),7]), 
+                              y=(mean(plot_betas$value)*sin(n/4))+0.1,yend=(mean(plot_betas$value)*sin(n/4))+0.1,  # oscilate around 0.5
+                              aes(col=external_gene_name))
+      print(n)
+      print(i)
+      
+      for (t in results_tss_list[[i]]$value) {  # plot all tss for each gene along the same line
+        p2 <- p2 +geom_segment(show.legend = F,x=t,xend=t,
+                               y=(mean(plot_betas$value)*sin(n/4))+0.1-0.08,yend=(mean(plot_betas$value)*sin(n/4))+0.1+0.08)  # making a tick
+        
+      }
+      n=n+1
     }
    
   p2 <- p2 + ylab ("Genes") +
@@ -203,7 +242,8 @@ g_legend<-function(a.gplot){
    mylegend2<-g_legend(p2)
    # 
   
- 
+   message("---------------plotting delta beta values------------------")
+   
 #Data for deltabeta
 plot_deltabeta=deltaBetas[ ,grepl(timecourse_stage, colnames(deltaBetas))] # subset beta on iPSC and the stage selected
 
@@ -222,6 +262,7 @@ limits_deltabeta=c(-1.0,1.0)
 # if(min(plot_deltabeta[1])<=-0.1){
 #   limits_deltabeta[1]=min(plot_deltabeta[1]) - 0.1
 #   }
+
 
 
 p3 <- ggplot(plot_deltabeta, aes(x = MAPINFO,y=deltaBeta)) + geom_line() + theme_minimal() + 
@@ -250,6 +291,8 @@ if(nrow(results)<=3){
   size_p2=2.2
 }
 
+message("---------------arranging all plots------------------")
+
 p4 <- grid.arrange(arrangeGrob(p1 + theme(legend.position="none"),ncol=1),
                    arrangeGrob(p2 + theme(legend.position="none"),ncol=1),
                    arrangeGrob(p3 + theme(legend.position="none"),ncol=1),
@@ -258,21 +301,28 @@ p4 <- grid.arrange(arrangeGrob(p1 + theme(legend.position="none"),ncol=1),
 
 # blank grob? blank<-rectGrob(gp=gpar(col="white"))
 
+message("---------------saving all plots------------------")
+
+
 ggsave(plot = p4,
        device="png",
        filename = paste("/Users/Marta/Documents/WTCHG/DPhil/Plots/Methylation_EPIC/DMR_and_DMP_timecourse_iPSC_vs", timecourse_stage,
-                        paste(results$external_gene_name, collapse = "_"),
+                        paste(unique(results$external_gene_name), collapse = "_"),
+                        paste(region, collapse = "_"),
                         currentDate,".png",sep="_"),
        width = 18, height = 6, units = "in",
        dpi = 400)
 
+
+message("---------------saving results in tables------------------")
 
 # table with DMPs
 
 selected_DMP=DMP_timecourse[[timecourse_stage]][which(DMP_timecourse[[timecourse_stage]]$CHR==region[1] & DMP_timecourse[[timecourse_stage]]$MAPINFO > region[2] & DMP_timecourse[[timecourse_stage]]$MAPINFO < region[3]),]
 capture.output(selected_DMP, 
                file=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP_timecourse_iPSC_vs",timecourse_stage,
-                          paste(results$external_gene_name, collapse = "_"),
+                          paste(unique(results$external_gene_name), collapse = "_"),
+                          paste(region, collapse = "_"),
                           currentDate,".txt",sep="_")) # to be able to check SNPs
 
 # taking out SNPs column, that makes the .csv file unreadable
@@ -281,12 +331,80 @@ selected_DMP2=selected_DMP[,c(1:15,17:19)]
 
 write.csv(selected_DMP2,
           paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP_timecourse_iPSC_vs",timecourse_stage,
-                paste(results$external_gene_name, collapse = "_"),
+                paste(unique(results$external_gene_name), collapse = "_"),
+                paste(region, collapse = "_"),
                 currentDate,".csv",sep="_"),
           row.names=T, quote=F)
 
 write.csv(selected_DMP,
           paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP_timecourse_iPSC_vs",timecourse_stage,
-                paste(results$external_gene_name, collapse = "_"),
+                paste(unique(results$external_gene_name), collapse = "_"),
+                paste(region, collapse = "_"),
                 currentDate,"plusSNPs.csv",sep="_"),
           row.names=T, quote=F)
+}
+
+# calculate mean beta value (only works for one gene) for selected stage (not iPSC)
+
+mean(plot_betas[which(plot_betas$MAPINFO<unique(results$end_position) & plot_betas$MAPINFO>unique(results$start_position) & plot_betas$variable!="iPSC"),7])
+
+# data from adult islets:
+
+islets=colnames(beta)[22:32]
+
+x_islets = islets # stages to subset
+beta_sub_islets=beta[ , grepl(paste(x_islets, collapse = "|") , colnames(beta) ) ] # subset beta on iPSC and the stage selected
+
+beta_sub_islets = cbind(beta_sub_islets,probe.features[rownames(beta_sub_islets),c("CHR","MAPINFO","gene","feature","cgi")]) # get relevant info from probes
+
+gene="SNRPN"
+region <- c(unique(results[which(results$external_gene_name==gene),5]),
+            unique(results[which(results$external_gene_name==gene),6]),
+            unique(results[which(results$external_gene_name==gene),7])) # just one gene
+
+plot_betas_islets=beta_sub_islets[which(beta_sub_islets$CHR == region[1] & beta_sub_islets$MAPINFO > region[2] & beta_sub_islets$MAPINFO < region[3]) , ]
+
+plot_betas_islets=melt(plot_betas_islets,id.vars = c("CHR","MAPINFO","gene","feature","cgi") )
+plot_betas_islets$variable=factor(plot_betas_islets$variable,levels=islets)
+
+
+# calculate mean beta value (only works for one gene) for adult islets
+
+mean(plot_betas_islets[which(plot_betas_islets$MAPINFO<unique(results$end_position) & plot_betas_islets$MAPINFO>unique(results$start_position) & plot_betas_islets$feature=="5'UTR"),7])
+
+
+# for all stages (not islets)
+
+
+beta_sub_stages=beta[ , grepl(paste(stages, collapse = "|") , colnames(beta) ) ] # subset beta on iPSC and the stage selected
+
+beta_sub_stages = cbind(beta_sub_stages,probe.features[rownames(beta_sub_stages),c("CHR","MAPINFO","gene","feature","cgi")]) # get relevant info from probes
+
+
+
+plots_betas_stages=beta_sub_stages[which(beta_sub_stages$CHR == region[1] & beta_sub_stages$MAPINFO > region[2] & beta_sub_stages$MAPINFO < region[3]) , ]
+
+plots_betas_stages=melt(plots_betas_stages,id.vars = c("CHR","MAPINFO","gene","feature","cgi") )
+plots_betas_stages$variable=gsub( "-.*$", "", plots_betas_stages$variable) # take out everything after "-" (sample name)
+
+plots_betas_stages$variable=factor(plots_betas_stages$variable,levels=stages)
+
+
+# calculate mean beta value (only works for one gene) for all stages
+
+
+mean(plots_betas_stages[which(plots_betas_stages$gene==gene  & (plots_betas_stages$feature=="TSS1500" | plots_betas_stages$feature=="TSS200")),7])
+
+# just EN7, just TSS
+mean(plots_betas_stages[which(plots_betas_stages$gene==gene  & (plots_betas_stages$feature=="TSS1500" | plots_betas_stages$feature=="TSS200") & plots_betas_stages$variable=="EN7"),7])
+
+# just EN7, all gene
+mean(plots_betas_stages[which(plots_betas_stages$gene==gene   & plots_betas_stages$variable=="EN7"),7])
+
+# adult islets, just TSS
+mean(plot_betas_islets[which(plot_betas_islets$gene==gene  & (plot_betas_islets$feature=="TSS1500" | plot_betas_islets$feature=="TSS200")),7])
+
+#specific probes
+
+rowMeans(beta["cg02490034",c(20:21)])  # BLC
+rowMeans(beta["cg02490034",c(22:32)]) # islets
