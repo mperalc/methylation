@@ -15,8 +15,8 @@ stages=c("iPSC","DE","PGT","PFG","PE","EP","EN6","EN7")
 
 islets=colnames(beta)[22:32]  # islets names
 diff_type="timecourse"   # type of differential analysis: peak or timecourse
-sample_type="diff"   # islets or diff
-plots=TRUE
+sample_type="diff"   # islets or differentiated cells ("diff")
+plots=TRUE    # plots or no plots in the middle of analysis
 #############   function to perform differential methylation analysis
 
 diff_meth_ChAMP=function(beta,pD,diff_type,sample_type,plots=FALSE){
@@ -25,15 +25,16 @@ diff_meth_ChAMP=function(beta,pD,diff_type,sample_type,plots=FALSE){
   
   if(sample_type=="islets"){
     
-    beta_diffcells=beta[,22:32]
+    beta_diffcells=beta[,c(1:3,20:32)]   # iPSC, BLC and adult islets
     
   }
   if(sample_type=="diff"){
-    beta_diffcells=beta[,1:21]
+    beta_diffcells=beta[,1:21]  # all differentiation stages
   }
 
-  beta_diffcells=as.matrix(beta_diffcells)
-  # create the design matrix, which contains the comparisons I want to make
+  beta_diffcells=as.matrix(beta_diffcells) 
+
+# create the design matrix, which contains the comparisons I want to make
   
   ####### create different matrices for each stage
   
@@ -55,30 +56,43 @@ diff_meth_ChAMP=function(beta,pD,diff_type,sample_type,plots=FALSE){
       group_timecourse[["EN7"]]=c(rep(-1,times=3),rep(0,times=16),rep(1,times=2)) #BLC vs iPSC
       # iPSC overmethylated regions are the undermethylated regions of the above 7
     }
+    if(sample_type=="islets"){
+      group_timecourse <- list()
+      group_timecourse[["EN7"]]=c(rep(-1,times=3),rep(1,times=2),rep(0,times=11)) #BLC vs iPSC
+      group_timecourse[["islets"]]=c(rep(-1,times=3),rep(0,times=2),rep(1,times=11))
+      group_timecourse[["islets-EN7"]]=c(rep(0,times=3),rep(-1,times=2),rep(1,times=11))
+      # iPSC overmethylated regions are the undermethylated regions of the above 7
+    }
     # write for islets
   }
   
   if(sample_type=="islets"){
-    design= pD[22:32,c(3,4)]
-  }else{
+    design= pD[c(1:3,20:32),c(3,4)]
+  }
+  if(sample_type=="diff"){
     design= pD[1:21,c(3,4)]
   }
 
   if(diff_type=="timecourse"){
     if(sample_type=="diff"){
-      design <- rep(list(design),7)
-      names(design_timecourse) = stages[2:length(stages)]
+      design <- rep(list(design),7) # one list per stage with all stages and samples, to then assign number according to comparisons
+      names(design) = stages[2:length(stages)]  # name by stages
       for(s in stages[2:length(stages)]){
-        design_timecourse[[s]]$group=group_timecourse[[s]] # fil list of df with appropriate design
-        design_timecourse[[s]]=design_timecourse[[s]][design_timecourse[[s]]$group!=0,] # select only rows with -1 or 1. Check this is necessary
+        design[[s]]$group=group_timecourse[[s]] # fill list of df with appropriate design
+        design[[s]]=design[[s]][design[[s]]$group!=0,] # select only rows with -1 or 1. Not sure if this is necessary
       }
-      if(sample_type=="islets"){
-        # write
+    if(sample_type=="islets"){
+      design <- rep(list(design),3)  # 3 comparisons: EN7-iPSC, islets-iPSC and islets - EN7
+      names(design) = names(group_timecourse)
+      for(s in names(group_timecourse)){
+        design[[s]]$group=group_timecourse[[s]] # fill list of df with appropriate design
+        design[[s]]=design[[s]][design[[s]]$group!=0,]   
+        }
       }
       
     }
   }
-  # can I check contrasts in this way?? what about iPSC?
+ 
   
   
   #######
@@ -88,107 +102,141 @@ diff_meth_ChAMP=function(beta,pD,diff_type,sample_type,plots=FALSE){
   ###################### #############
   #summary information of probes:
   # do the same with piecharts and %
-  CpG.GUI(CpG=rownames(beta_diffcells),arraytype="EPIC")
   
   CpG=rownames(beta_diffcells)  # get probe names - CpG regions
   
   data("probe.features.epic") #load probe features from EPIC data
-  cgi.info <- table(probe.features[CpG,"cgi"])
-  chromsome.info <- table(probe.features[CpG,"CHR"])
-  feature.info <- table(probe.features[CpG,"feature"])
-  type.info <- table(probe.features[CpG,"Type"])
   
-  # plot as stacked bar chart
-  
-  p1 <- ggplot(as.data.frame(cgi.info), aes(x="x",y=Freq,fill=Var1)) + geom_bar(stat="identity") +
-    ggtitle("Location of probes in genome") +
-    ylab ("Amount of probes") +
-    theme_bw()+
-    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
-          axis.text.y=element_text(size=12,face="bold"),axis.text.x=element_blank(),
-          axis.ticks.x = element_blank(),
-          panel.border=element_blank(),plot.title = element_text(size=15,face="bold"),
-          axis.title.y=element_text(size=14,face="bold"),axis.title.x=element_blank(),
-          legend.text = element_text(size=11,face="bold"),legend.title = element_blank(),
-          legend.position = "bottom",legend.direction = "horizontal") +
-    geom_hline(yintercept=0,size=1)
-  ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/probes_in_genome_CpGisland",currentDate,".jpg",sep=""),p1,width=4,height=4,units="in",dpi=300)
-  
-  p2 <- ggplot(as.data.frame(feature.info), aes(x="x",y=Freq,fill=Var1)) + geom_bar(stat="identity")+
-    ggtitle("Location of probes in genome") +
-    ylab ("Amount of probes") +
-    theme_bw()+
-    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
-          axis.text.y=element_text(size=12,face="bold"),axis.text.x=element_blank(),
-          axis.ticks.x = element_blank(),
-          panel.border=element_blank(),plot.title = element_text(size=15,face="bold"),
-          axis.title.y=element_text(size=14,face="bold"),axis.title.x=element_blank(),
-          legend.text = element_text(size=8,face="bold"),legend.title = element_blank(),
-          legend.position = "bottom",legend.direction = "horizontal") +
-    geom_hline(yintercept=0,size=1)
-  
-  ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/probes_in_genome_gene",currentDate,".jpg",sep=""),p2,width=4,height=4,units="in",dpi=300)
-  
-  
-  p3 <- ggplot(as.data.frame(type.info), aes(x="x",y=Freq,fill=Var1)) + geom_bar(stat="identity") +
-    ggtitle("Type of probes") +
-    ylab ("Amount of probes") +
-    theme_bw()+
-    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
-          axis.text.y=element_text(size=12,face="bold"),axis.text.x=element_blank(),
-          axis.ticks.x = element_blank(),
-          panel.border=element_blank(),plot.title = element_text(size=15,face="bold"),
-          axis.title.y=element_text(size=14,face="bold"),axis.title.x=element_blank(),
-          legend.text = element_text(size=11,face="bold"),legend.title = element_blank(),
-          legend.position = "bottom",legend.direction = "horizontal") +
-    geom_hline(yintercept=0,size=1)
-  ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/probe_types",currentDate,".jpg",sep=""),p3,width=4,height=4,units="in",dpi=300)
-  
-  
-  chromosome.info=as.data.frame(chromsome.info)[2:23,] # subset chromosome data
-  chromosome.info$Var1=droplevels(chromosome.info$Var1) # drop unused levels
-  chromosome.info$Var1=factor(chromosome.info$Var1,levels=c(1:22)) # reorder levels for plot
-  
-  p4 <- ggplot(chromosome.info, aes(x="x",y=Freq,fill=Var1)) + geom_bar(stat="identity") +
-    ggtitle("Distribution of probes among chromosomes") +
-    ylab ("Amount of probes") +
-    theme_bw()+
-    theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
-          axis.text.y=element_text(size=12,face="bold"),axis.text.x=element_blank(),
-          axis.ticks.x = element_blank(),
-          panel.border=element_blank(),plot.title = element_text(size=12,face="bold"),
-          axis.title.y=element_text(size=12,face="bold"),axis.title.x=element_blank(),
-          legend.key.size = unit(0.3,"cm"),
-          legend.text = element_text(size=8,face="bold"),legend.title = element_blank(),
-          legend.position = "bottom",legend.direction = "horizontal") +
-    guides(fill=guide_legend(nrow=2)) +
-    geom_hline(yintercept=0,size=1)
-  ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/probe_in_chr",currentDate,".jpg",sep=""),p4,width=4,height=4,units="in",dpi=300)
+  if(plot==TRUE){
+    cgi.info <- table(probe.features[CpG,"cgi"])
+    chromsome.info <- table(probe.features[CpG,"CHR"])
+    feature.info <- table(probe.features[CpG,"feature"])
+    type.info <- table(probe.features[CpG,"Type"])
+    
+    # plot as stacked bar chart
+    
+    p1 <- ggplot(as.data.frame(cgi.info), aes(x="x",y=Freq,fill=Var1)) + geom_bar(stat="identity") +
+      ggtitle("Location of probes in genome") +
+      ylab ("Amount of probes") +
+      theme_bw()+
+      theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
+            axis.text.y=element_text(size=12,face="bold"),axis.text.x=element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.border=element_blank(),plot.title = element_text(size=15,face="bold"),
+            axis.title.y=element_text(size=14,face="bold"),axis.title.x=element_blank(),
+            legend.text = element_text(size=11,face="bold"),legend.title = element_blank(),
+            legend.position = "bottom",legend.direction = "horizontal") +
+      geom_hline(yintercept=0,size=1)
+    ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/probes_in_genome_CpGisland",currentDate,".jpg",sep=""),p1,width=4,height=4,units="in",dpi=300)
+    
+    p2 <- ggplot(as.data.frame(feature.info), aes(x="x",y=Freq,fill=Var1)) + geom_bar(stat="identity")+
+      ggtitle("Location of probes in genome") +
+      ylab ("Amount of probes") +
+      theme_bw()+
+      theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
+            axis.text.y=element_text(size=12,face="bold"),axis.text.x=element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.border=element_blank(),plot.title = element_text(size=15,face="bold"),
+            axis.title.y=element_text(size=14,face="bold"),axis.title.x=element_blank(),
+            legend.text = element_text(size=8,face="bold"),legend.title = element_blank(),
+            legend.position = "bottom",legend.direction = "horizontal") +
+      geom_hline(yintercept=0,size=1)
+    
+    ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/probes_in_genome_gene",currentDate,".jpg",sep=""),p2,width=4,height=4,units="in",dpi=300)
+    
+    
+    p3 <- ggplot(as.data.frame(type.info), aes(x="x",y=Freq,fill=Var1)) + geom_bar(stat="identity") +
+      ggtitle("Type of probes") +
+      ylab ("Amount of probes") +
+      theme_bw()+
+      theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
+            axis.text.y=element_text(size=12,face="bold"),axis.text.x=element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.border=element_blank(),plot.title = element_text(size=15,face="bold"),
+            axis.title.y=element_text(size=14,face="bold"),axis.title.x=element_blank(),
+            legend.text = element_text(size=11,face="bold"),legend.title = element_blank(),
+            legend.position = "bottom",legend.direction = "horizontal") +
+      geom_hline(yintercept=0,size=1)
+    ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/probe_types",currentDate,".jpg",sep=""),p3,width=4,height=4,units="in",dpi=300)
+    
+    
+    chromosome.info=as.data.frame(chromsome.info)[2:23,] # subset chromosome data
+    chromosome.info$Var1=droplevels(chromosome.info$Var1) # drop unused levels
+    chromosome.info$Var1=factor(chromosome.info$Var1,levels=c(1:22)) # reorder levels for plot
+    
+    p4 <- ggplot(chromosome.info, aes(x="x",y=Freq,fill=Var1)) + geom_bar(stat="identity") +
+      ggtitle("Distribution of probes among chromosomes") +
+      ylab ("Amount of probes") +
+      theme_bw()+
+      theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
+            axis.text.y=element_text(size=12,face="bold"),axis.text.x=element_blank(),
+            axis.ticks.x = element_blank(),
+            panel.border=element_blank(),plot.title = element_text(size=12,face="bold"),
+            axis.title.y=element_text(size=12,face="bold"),axis.title.x=element_blank(),
+            legend.key.size = unit(0.3,"cm"),
+            legend.text = element_text(size=8,face="bold"),legend.title = element_blank(),
+            legend.position = "bottom",legend.direction = "horizontal") +
+      guides(fill=guide_legend(nrow=2)) +
+      geom_hline(yintercept=0,size=1)
+    ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/probe_in_chr",currentDate,".jpg",sep=""),p4,width=4,height=4,units="in",dpi=300)
+    
+  }
   
   #################
-  QC.GUI(CpG=rownames(beta_diffcells),arraytype="EPIC")
   
+  # DMR
   
-  # need design to test 1 sample vs all others (peak/stage-specific) or using contrasts against iPSC(timecourse/across-stages)
-  myDMR_peak <- champ.DMR(beta=beta_diffcells,pheno=design_peak$group,method="Bumphunter",arraytype = "EPIC")
-  
-  # ChAMP only tests two groups. Ensure the comparisons are correct!
-  myDMR_timecourse <- list()
-  for(s in stages[2:length(stages)]){
-    x = c("iPSC",s) # two stages to contrast
-    print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
-    beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
-    myDMR_timecourse[[s]] <- champ.DMR(beta=beta_sub, 
-                                       maxGap=900, 
-                                       cores=4,
-                                       pheno=design_timecourse[[s]]$group,
-                                       method="Bumphunter",
-                                       arraytype = "EPIC") # call function
+  if(diff_type=="peak"){   ###complete
+    myDMR_peak <- champ.DMR(beta=beta_diffcells,pheno=design_peak$group,method="Bumphunter",arraytype = "EPIC")
   }
   
-  for(s in stages[2:length(stages)]){
-    write.csv(myDMR_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
-  }
+  if(diff_type=="timecourse"){
+    if(sample_type=="diff"){
+      # ChAMP only tests two groups. Ensure the comparisons are correct!
+      myDMR_timecourse <- list()
+      for(s in stages[2:length(stages)]){
+        x = c("iPSC",s) # two stages to contrast
+        print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
+        beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
+        myDMR_timecourse[[s]] <- champ.DMR(beta=beta_sub, 
+                                           maxGap=900, 
+                                           cores=4,
+                                           pheno=design[[s]]$group,
+                                           method="Bumphunter",
+                                           arraytype = "EPIC") # call function
+      }
+      for(s in stages[2:length(stages)]){
+        write.csv(myDMR_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
+      }
+    }
+    if(sample_type=="islets"){
+      # ChAMP only tests two groups. Ensure the comparisons are correct!
+      myDMR_timecourse <- list()
+      for(s in names(group_timecourse)){
+        if(s=="EN7"){
+          x = c("iPSC",s) # two stages to contrast
+        }
+        if(s=="islets"){
+          x = c("iPSC","ISL","R") 
+        }
+        if(s=="islets-EN7"){
+          x = c("EN7","ISL","R") 
+        }
+        print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
+        beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
+        myDMR_timecourse[[s]] <- champ.DMR(beta=beta_sub, 
+                                           maxGap=900, 
+                                           cores=4,
+                                           pheno=design[[s]]$group,
+                                           method="Bumphunter",
+                                           arraytype = "EPIC") # call function
+      }
+      for(s in names(group_timecourse)){
+        write.csv(myDMR_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
+      }
+    }
+  } 
+  
   
   DMR.GUI(DMR=myDMR_timecourse[["EN7"]],beta=beta_sub,pheno=design_timecourse$EN7$group,arraytype = "EPIC",runDMP = F) 
   # not doing what it's supposed to do
@@ -372,7 +420,7 @@ diff_meth_ChAMP=function(beta,pD,diff_type,sample_type,plots=FALSE){
       colnames(avg) <- c(paste(compare.group,"AVG",sep="_"),"deltaBeta")
       DMP <- data.frame(DMP[com.idx,],avg,probe.features[com.idx,])
       myDMP_timecourse[[s]] <- DMP 
-      message("[<<<<<< ChAMP.DMP VARIATION ENDED, JUST AS ALL THINGS END IN LIFE >>>>>>]")
+      message("[<<<<<< ChAMP.DMP VARIATION ENDED >>>>>>]")
       message("[===========================]")
       
     }else{
