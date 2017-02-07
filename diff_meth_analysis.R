@@ -15,8 +15,8 @@ stages=c("iPSC","DE","PGT","PFG","PE","EP","EN6","EN7")
 
 islets=colnames(beta)[22:32]  # islets names
 diff_type="timecourse"   # type of differential analysis: peak or timecourse
-sample_type="diff"   # islets or differentiated cells ("diff")
-plots=TRUE    # plots or no plots in the middle of analysis
+sample_type="islets"   # islets or differentiated cells ("diff")
+plots=FALSE    # plots or no plots in the middle of analysis
 #############   function to perform differential methylation analysis
 
 diff_meth_ChAMP=function(beta,pD,diff_type,sample_type,plots=FALSE){
@@ -59,9 +59,9 @@ diff_meth_ChAMP=function(beta,pD,diff_type,sample_type,plots=FALSE){
     if(sample_type=="islets"){
       group_timecourse <- list()
       group_timecourse[["EN7"]]=c(rep(-1,times=3),rep(1,times=2),rep(0,times=11)) #BLC vs iPSC
-      group_timecourse[["islets"]]=c(rep(-1,times=3),rep(0,times=2),rep(1,times=11))
-      group_timecourse[["islets-EN7"]]=c(rep(0,times=3),rep(-1,times=2),rep(1,times=11))
-      # iPSC overmethylated regions are the undermethylated regions of the above 7
+      group_timecourse[["islets"]]=c(rep(-1,times=3),rep(0,times=2),rep(1,times=11)) # islets vs iPSC
+      group_timecourse[["islets-EN7"]]=c(rep(0,times=3),rep(-1,times=2),rep(1,times=11)) # islets vs BLC
+ 
     }
     # write for islets
   }
@@ -237,258 +237,321 @@ diff_meth_ChAMP=function(beta,pD,diff_type,sample_type,plots=FALSE){
     }
   } 
   
-  
-  DMR.GUI(DMR=myDMR_timecourse[["EN7"]],beta=beta_sub,pheno=design_timecourse$EN7$group,arraytype = "EPIC",runDMP = F) 
-  # not doing what it's supposed to do
-  
-  
   ######################### Differentially methylated probes#########################
+  if(diff_type=="timecourse"){
+    if(sample_type=="diff"){  
+      
+      # iPSC vs all others. Change for each peak test
+      group_timecourse <- list()
+      group_timecourse[["DE"]]=c(rep("iPSC",times=3),rep("DE",times=3),rep(0,times=15)) #DE vs iPSC
+      group_timecourse[["PGT"]]=c(rep("iPSC",times=3),rep(0,times=3),rep("PGT",times=3),rep(0,times=12)) #PGT vs iPSC
+      group_timecourse[["PFG"]]=c(rep("iPSC",times=3),rep(0,times=6),rep("PFG",times=3),rep(0,times=9)) #PFG vs iPSC
+      group_timecourse[["PE"]]=c(rep("iPSC",times=3),rep(0,times=9),rep("PE",times=3),rep(0,times=6)) #PE vs iPSC
+      group_timecourse[["EP"]]=c(rep("iPSC",times=3),rep(0,times=12),rep("EP",times=1),rep(0,times=5)) #EP vs iPSC. Just one sample, so not really diff meth
+      group_timecourse[["EN6"]]=c(rep("iPSC",times=3),rep(0,times=13),rep("EN6",times=3),rep(0,times=2)) #EN vs iPSC
+      group_timecourse[["EN7"]]=c(rep("iPSC",times=3),rep(0,times=16),rep("EN7",times=2)) #BLC vs iPSC
+      
+    }
+    if(sample_type=="islets"){
+      group_timecourse <- list()
+      group_timecourse[["EN7"]]=c(rep("iPSC",times=3),rep("EN7",times=2),rep(0,times=11)) #BLC vs iPSC
+      group_timecourse[["islets"]]=c(rep("iPSC",times=3),rep(0,times=2),rep("islets",times=11)) # islets vs iPSC
+      group_timecourse[["islets-EN7"]]=c(rep(0,times=3),rep("EN7",times=2),rep("islets",times=11)) # islets vs BLC
+      
+    }
+  }
+ 
   
   
-  # iPSC vs all others. Change for each peak test
-  group_timecourse <- list()
-  group_timecourse[["DE"]]=c(rep("iPSC",times=3),rep("DE",times=3),rep(0,times=15)) #DE vs iPSC
-  group_timecourse[["PGT"]]=c(rep("iPSC",times=3),rep(0,times=3),rep("PGT",times=3),rep(0,times=12)) #PGT vs iPSC
-  group_timecourse[["PFG"]]=c(rep("iPSC",times=3),rep(0,times=6),rep("PFG",times=3),rep(0,times=9)) #PFG vs iPSC
-  group_timecourse[["PE"]]=c(rep("iPSC",times=3),rep(0,times=9),rep("PE",times=3),rep(0,times=6)) #PE vs iPSC
-  group_timecourse[["EP"]]=c(rep("iPSC",times=3),rep(0,times=12),rep("EP",times=1),rep(0,times=5)) #EP vs iPSC. Just one sample, so not really diff meth
-  group_timecourse[["EN6"]]=c(rep("iPSC",times=3),rep(0,times=13),rep("EN6",times=3),rep(0,times=2)) #EN vs iPSC
-  group_timecourse[["EN7"]]=c(rep("iPSC",times=3),rep(0,times=16),rep("EN7",times=2)) #BLC vs iPSC
+  if(sample_type=="islets"){
+    design= pD[c(1:3,20:32),c(3,4)]
+  }
+  if(sample_type=="diff"){
+    design= pD[1:21,c(3,4)]
+  }
   
-  # iPSC overmethylated regions are the undermethylated regions of the above 7
-  
-  design_timecourse= pD[1:21,c(3,4)]
-  
-  design_timecourse <- rep(list(design_timecourse),7)
-  names(design_timecourse) = stages[2:length(stages)]
-  for(s in stages[2:length(stages)]){
-    design_timecourse[[s]]$group=group_timecourse[[s]] # fil list of df with appropriate design
-    design_timecourse[[s]]=design_timecourse[[s]][design_timecourse[[s]]$group!=0,] # select only rows non 0 vals.
-    
+  if(diff_type=="timecourse"){
+    if(sample_type=="diff"){
+      design <- rep(list(design),7) # one list per stage with all stages and samples, to then assign number according to comparisons
+      names(design) = stages[2:length(stages)]  # name by stages
+      for(s in stages[2:length(stages)]){
+        design[[s]]$group=group_timecourse[[s]] # fill list of df with appropriate design
+        design[[s]]=design[[s]][design[[s]]$group!=0,] # select only rows non 0 vals.
+      }
+      if(sample_type=="islets"){
+        design <- rep(list(design),3)  # 3 comparisons: EN7-iPSC, islets-iPSC and islets - EN7
+        names(design) = names(group_timecourse)
+        for(s in names(group_timecourse)){
+          design[[s]]$group=group_timecourse[[s]] 
+          design[[s]]=design[[s]][design[[s]]$group!=0,]   
+        }
+      }
+      
+    }
   }
   
   myDMP_timecourse <- list()
-  for(s in stages[2:length(stages)]){
-    x = c("iPSC",s) # two stages to contrast
-    print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
-    beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
-    
-    if(is.null(dim(beta_diffcells[ , grepl(x[2] , colnames( beta_diffcells ))]))){
-      # if second stage (not iPSC) only has one column, do this alternative version of champ.DMP
-      # Here there's no average beta value for each CpG in the stage with one sample, just its only beta value
-      # As there are not replicates, this is not a true differential methylation analysis. Hence the message:
-      message(paste("The stage",x[2],"has only one sample. Doing DMP variation, but do not trust results.",sep=" "))
-      message("[===========================]")
-      message("[<<<<< ChAMP.DMP VARIATION STARTING >>>>>]")
-      message("-----------------------------")
-      
-      ### setup
-      beta=beta_sub
-      pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s))
-      arraytype = "EPIC"
-      message(paste("The array type is",arraytype,sep=" "))
-      adjPVal = 0.05
-      message(paste("The adjusted p-val threshold to report is",adjPVal,sep=" "))
-      adjust.method = "BH"
-      message(paste("The adjustment method for multiple testing is",adjust.method,sep=" "))
-      
-      
-      #end of setup 
-      
-      message("\n<< Your pheno information contains following groups. >>")
-      sapply(unique(pheno),function(x) message("<",x,">:",sum(pheno==x)," samples."))
-      message("[The power of statistics analysis on groups contain very few samples may not be strong.]")
-      
-      message("You did not assign compare groups. The first two groups: <",unique(pheno)[1],"> and <",unique(pheno)[2],">, will be compared automatically.")
-      compare.group <- unique(pheno)[1:2]
-      
-      p <- pheno[which(pheno %in% compare.group)]
-      beta <- beta[,which(pheno %in% compare.group)]
-      design <- model.matrix( ~ 0 + p)
-      # contrast.matrix requires the initial groups from pheno to be recorded as factors, preferably names (for example, stages)
-      contrast.matrix <- makeContrasts(contrasts=paste(colnames(design)[2:1],collapse="-"), levels=colnames(design))
-      message("\n<< Contrast Matrix >>")
-      print(contrast.matrix)
-      
-      message("\n<< All beta, pheno and model are prepared successfully. >>")
-      
-      fit <- lmFit(beta, design)
-      fit2 <- contrasts.fit(fit,contrast.matrix)
-      tryCatch(fit3 <- eBayes(fit2),
-               warning=function(w) 
-               {
-                 stop("limma failed, No sample variance.\n")
-               }) # if the contrast matrix is not correct, DMP function will fail here
-      
-      DMP <- topTable(fit3,coef=1,number=nrow(beta),adjust.method=adjust.method,p.value=adjPVal)
-      message("You have found ",sum(DMP$adj.P.Val <= adjPVal), " significant MVPs with a ",adjust.method," adjusted P-value below ", adjPVal,".")
-      message("\n<< Calculate DMP successfully. >>")
-      
-      if(arraytype == "EPIC") data(probe.features.epic) else data(probe.features)
-      com.idx <- intersect(rownames(DMP),rownames(probe.features))
-      avg <-  cbind(rowMeans(beta[com.idx,which(p==compare.group[1])]),beta[com.idx,which(p==compare.group[2])])
-      avg <- cbind(avg,avg[,2]-avg[,1])
-      colnames(avg) <- c(paste(compare.group,"AVG",sep="_"),"deltaBeta")
-      DMP <- data.frame(DMP[com.idx,],avg,probe.features[com.idx,])
-      myDMP_timecourse[[s]] <- DMP 
-      message("[<<<<<< ChAMP.DMP VARIATION ENDED, JUST AS ALL THINGS END IN LIFE >>>>>>]")
-      message("[===========================]")
-      
-    }else{
-      
-      myDMP_timecourse[[s]] <- champ.DMP(beta = beta_sub, 
-                                         pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
-                                         arraytype = "EPIC"   ) # call function
+  if(diff_type=="timecourse"){
+    if(sample_type=="diff"){
+      for(s in stages[2:length(stages)]){
+        x = c("iPSC",s) # two stages to contrast
+        print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
+        beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
+        beta_sub[beta_sub<=0.001]<-0.001 # replacing extreme values
+        beta_sub[beta_sub>=0.999]<-0.999
+        
+        M <- log((beta_sub/(1-beta_sub)),2) # calculates M values
+        
+        M=as.matrix(M) # Y needs to be a matrix
+        
+        if(is.null(dim(beta_diffcells[ , grepl(x[2] , colnames( beta_diffcells ))]))){
+          # if second stage (not iPSC) only has one column, do this alternative version of champ.DMP
+          # Here there's no average beta value for each CpG in the stage with one sample, just its only beta value
+          # As there are not replicates, this is not a true differential methylation analysis. Hence the message:
+          message(paste("The stage",x[2],"has only one sample. Doing DMP variation, but do not trust results.",sep=" "))
+          message("[===========================]")
+          message("[<<<<< ChAMP.DMP VARIATION STARTING >>>>>]")
+          message("-----------------------------")
+          
+          ### setup
+          beta=M
+          pheno=factor(design[[s]]$group,levels=c("iPSC",s))
+          arraytype = "EPIC"
+          message(paste("The array type is",arraytype,sep=" "))
+          adjPVal = 0.05
+          message(paste("The adjusted p-val threshold to report is",adjPVal,sep=" "))
+          adjust.method = "BH"
+          message(paste("The adjustment method for multiple testing is",adjust.method,sep=" "))
+          
+          
+          #end of setup 
+          
+          message("\n<< Your pheno information contains following groups. >>")
+          sapply(unique(pheno),function(x) message("<",x,">:",sum(pheno==x)," samples."))
+          message("[The power of statistics analysis on groups contain very few samples may not be strong.]")
+          
+          message("You did not assign compare groups. The first two groups: <",unique(pheno)[1],"> and <",unique(pheno)[2],">, will be compared automatically.")
+          compare.group <- unique(pheno)[1:2]
+          
+          p <- pheno[which(pheno %in% compare.group)]
+          beta <- beta[,which(pheno %in% compare.group)]
+          design2 <- model.matrix( ~ 0 + p)
+          # contrast.matrix requires the initial groups from pheno to be recorded as factors, preferably names (for example, stages)
+          contrast.matrix <- makeContrasts(contrasts=paste(colnames(design2)[2:1],collapse="-"), levels=colnames(design2))
+          message("\n<< Contrast Matrix >>")
+          print(contrast.matrix)
+          
+          message("\n<< All beta, pheno and model are prepared successfully. >>")
+          
+          fit <- lmFit(beta, design2)
+          fit2 <- contrasts.fit(fit,contrast.matrix)
+          tryCatch(fit3 <- eBayes(fit2),
+                   warning=function(w) 
+                   {
+                     stop("limma failed, No sample variance.\n")
+                   }) # if the contrast matrix is not correct, DMP function will fail here
+          
+          DMP <- topTable(fit3,coef=1,number=nrow(beta),adjust.method=adjust.method,p.value=adjPVal)
+          message("You have found ",sum(DMP$adj.P.Val <= adjPVal), " significant MVPs with a ",adjust.method," adjusted P-value below ", adjPVal,".")
+          message("\n<< Calculate DMP successfully. >>")
+          
+          if(arraytype == "EPIC") data(probe.features.epic) else data(probe.features)
+          com.idx <- intersect(rownames(DMP),rownames(probe.features))
+          avg <-  cbind(rowMeans(beta[com.idx,which(p==compare.group[1])]),beta[com.idx,which(p==compare.group[2])])
+          avg <- cbind(avg,avg[,2]-avg[,1])
+          colnames(avg) <- c(paste(compare.group,"AVG",sep="_"),"deltaBeta")
+          DMP <- data.frame(DMP[com.idx,],avg,probe.features[com.idx,])
+          myDMP_timecourse[[s]] <- DMP 
+          message("[<<<<<< ChAMP.DMP VARIATION ENDED >>>>>>]")
+          message("[===========================]")
+          
+        }else{
+          
+          myDMP_timecourse[[s]] <- champ.DMP(beta = M, 
+                                             pheno=factor(design[[s]]$group,levels=c("iPSC",s)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
+                                             arraytype = "EPIC"   ) # call function
+        }
+        
+      }
     }
-    
+    if(sample_type=="islets"){
+      for(s in names(group_timecourse)){
+        if(s=="EN7"){
+          x = c("iPSC",s) # two stages to contrast
+        }
+        if(s=="islets"){
+          x = c("iPSC","ISL","R") 
+        }
+        if(s=="islets-EN7"){
+          x = c("EN7","ISL","R") 
+        }
+        print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
+        beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
+        beta_sub[beta_sub<=0.001]<-0.001 # replacing extreme values
+        beta_sub[beta_sub>=0.999]<-0.999
+        
+        M <- log((beta_sub/(1-beta_sub)),2) # calculates M values
+        M=as.matrix(M) # Y needs to be a matrix
+          
+        myDMP_timecourse[[s]] <- champ.DMP(beta = M, 
+                                             pheno=factor(design[[s]]$group,levels=unique(design[[s]]$group)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
+                                             arraytype = "EPIC"   ) # call function
+      }
+    }
   }
-  
-  myDMP_timecourse_beta_forplots=myDMP_timecourse  # saving for plotting delta beta etc.
-  
-  
-  
+  # 
+  # 
+  # myDMP_timecourse <- list()
+  # for(s in stages[2:length(stages)]){
+  #   x = c("iPSC",s) # two stages to contrast
+  #   print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
+  #   beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
+  #   
+  #   if(is.null(dim(beta_diffcells[ , grepl(x[2] , colnames( beta_diffcells ))]))){
+  #     # if second stage (not iPSC) only has one column, do this alternative version of champ.DMP
+  #     # Here there's no average beta value for each CpG in the stage with one sample, just its only beta value
+  #     # As there are not replicates, this is not a true differential methylation analysis. Hence the message:
+  #     message(paste("The stage",x[2],"has only one sample. Doing DMP variation, but do not trust results.",sep=" "))
+  #     message("[===========================]")
+  #     message("[<<<<< ChAMP.DMP VARIATION STARTING >>>>>]")
+  #     message("-----------------------------")
+  #     
+  #     ### setup
+  #     beta=beta_sub
+  #     pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s))
+  #     arraytype = "EPIC"
+  #     message(paste("The array type is",arraytype,sep=" "))
+  #     adjPVal = 0.05
+  #     message(paste("The adjusted p-val threshold to report is",adjPVal,sep=" "))
+  #     adjust.method = "BH"
+  #     message(paste("The adjustment method for multiple testing is",adjust.method,sep=" "))
+  #     
+  #     
+  #     #end of setup 
+  #     
+  #     message("\n<< Your pheno information contains following groups. >>")
+  #     sapply(unique(pheno),function(x) message("<",x,">:",sum(pheno==x)," samples."))
+  #     message("[The power of statistics analysis on groups contain very few samples may not be strong.]")
+  #     
+  #     message("You did not assign compare groups. The first two groups: <",unique(pheno)[1],"> and <",unique(pheno)[2],">, will be compared automatically.")
+  #     compare.group <- unique(pheno)[1:2]
+  #     
+  #     p <- pheno[which(pheno %in% compare.group)]
+  #     beta <- beta[,which(pheno %in% compare.group)]
+  #     design <- model.matrix( ~ 0 + p)
+  #     # contrast.matrix requires the initial groups from pheno to be recorded as factors, preferably names (for example, stages)
+  #     contrast.matrix <- makeContrasts(contrasts=paste(colnames(design)[2:1],collapse="-"), levels=colnames(design))
+  #     message("\n<< Contrast Matrix >>")
+  #     print(contrast.matrix)
+  #     
+  #     message("\n<< All beta, pheno and model are prepared successfully. >>")
+  #     
+  #     fit <- lmFit(beta, design)
+  #     fit2 <- contrasts.fit(fit,contrast.matrix)
+  #     tryCatch(fit3 <- eBayes(fit2),
+  #              warning=function(w) 
+  #              {
+  #                stop("limma failed, No sample variance.\n")
+  #              }) # if the contrast matrix is not correct, DMP function will fail here
+  #     
+  #     DMP <- topTable(fit3,coef=1,number=nrow(beta),adjust.method=adjust.method,p.value=adjPVal)
+  #     message("You have found ",sum(DMP$adj.P.Val <= adjPVal), " significant MVPs with a ",adjust.method," adjusted P-value below ", adjPVal,".")
+  #     message("\n<< Calculate DMP successfully. >>")
+  #     
+  #     if(arraytype == "EPIC") data(probe.features.epic) else data(probe.features)
+  #     com.idx <- intersect(rownames(DMP),rownames(probe.features))
+  #     avg <-  cbind(rowMeans(beta[com.idx,which(p==compare.group[1])]),beta[com.idx,which(p==compare.group[2])])
+  #     avg <- cbind(avg,avg[,2]-avg[,1])
+  #     colnames(avg) <- c(paste(compare.group,"AVG",sep="_"),"deltaBeta")
+  #     DMP <- data.frame(DMP[com.idx,],avg,probe.features[com.idx,])
+  #     myDMP_timecourse[[s]] <- DMP 
+  #     message("[<<<<<< ChAMP.DMP VARIATION ENDED, JUST AS ALL THINGS END IN LIFE >>>>>>]")
+  #     message("[===========================]")
+  #     
+  #   }else{
+  #     
+  #     myDMP_timecourse[[s]] <- champ.DMP(beta = beta_sub, 
+  #                                        pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
+  #                                        arraytype = "EPIC"   ) # call function
+  #   }
+  #   
+  # }
+  # 
+  # myDMP_timecourse_beta_forplots=myDMP_timecourse  # saving for plotting delta beta etc.
+  # 
+  # 
+  # 
   
   ################ now with M values
   
   
-  for(s in stages[2:length(stages)]){
-    x = c("iPSC",s) # two stages to contrast
-    print(paste(" Testing contrast", paste(x, collapse = "|") ,sep=" ")) # message of progress
-    beta_sub=beta_diffcells[ , grepl(paste(x, collapse = "|") , colnames( beta_diffcells ) ) ] # subset beta on contrast stages
-    beta_sub[beta_sub<=0.001]<-0.001 # replacing extreme values
-    beta_sub[beta_sub>=0.999]<-0.999
-    
-    M <- log((beta_sub/(1-beta_sub)),2) # calculates M values
-    
-    M=as.matrix(M) # Y needs to be a matrix
-    
-    if(is.null(dim(beta_diffcells[ , grepl(x[2] , colnames( beta_diffcells ))]))){
-      # if second stage (not iPSC) only has one column, do this alternative version of champ.DMP
-      # Here there's no average beta value for each CpG in the stage with one sample, just its only beta value
-      # As there are not replicates, this is not a true differential methylation analysis. Hence the message:
-      message(paste("The stage",x[2],"has only one sample. Doing DMP variation, but do not trust results.",sep=" "))
-      message("[===========================]")
-      message("[<<<<< ChAMP.DMP VARIATION STARTING >>>>>]")
-      message("-----------------------------")
-      
-      ### setup
-      beta=M
-      pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s))
-      arraytype = "EPIC"
-      message(paste("The array type is",arraytype,sep=" "))
-      adjPVal = 0.05
-      message(paste("The adjusted p-val threshold to report is",adjPVal,sep=" "))
-      adjust.method = "BH"
-      message(paste("The adjustment method for multiple testing is",adjust.method,sep=" "))
-      
-      
-      #end of setup 
-      
-      message("\n<< Your pheno information contains following groups. >>")
-      sapply(unique(pheno),function(x) message("<",x,">:",sum(pheno==x)," samples."))
-      message("[The power of statistics analysis on groups contain very few samples may not be strong.]")
-      
-      message("You did not assign compare groups. The first two groups: <",unique(pheno)[1],"> and <",unique(pheno)[2],">, will be compared automatically.")
-      compare.group <- unique(pheno)[1:2]
-      
-      p <- pheno[which(pheno %in% compare.group)]
-      beta <- beta[,which(pheno %in% compare.group)]
-      design <- model.matrix( ~ 0 + p)
-      # contrast.matrix requires the initial groups from pheno to be recorded as factors, preferably names (for example, stages)
-      contrast.matrix <- makeContrasts(contrasts=paste(colnames(design)[2:1],collapse="-"), levels=colnames(design))
-      message("\n<< Contrast Matrix >>")
-      print(contrast.matrix)
-      
-      message("\n<< All beta, pheno and model are prepared successfully. >>")
-      
-      fit <- lmFit(beta, design)
-      fit2 <- contrasts.fit(fit,contrast.matrix)
-      tryCatch(fit3 <- eBayes(fit2),
-               warning=function(w) 
-               {
-                 stop("limma failed, No sample variance.\n")
-               }) # if the contrast matrix is not correct, DMP function will fail here
-      
-      DMP <- topTable(fit3,coef=1,number=nrow(beta),adjust.method=adjust.method,p.value=adjPVal)
-      message("You have found ",sum(DMP$adj.P.Val <= adjPVal), " significant MVPs with a ",adjust.method," adjusted P-value below ", adjPVal,".")
-      message("\n<< Calculate DMP successfully. >>")
-      
-      if(arraytype == "EPIC") data(probe.features.epic) else data(probe.features)
-      com.idx <- intersect(rownames(DMP),rownames(probe.features))
-      avg <-  cbind(rowMeans(beta[com.idx,which(p==compare.group[1])]),beta[com.idx,which(p==compare.group[2])])
-      avg <- cbind(avg,avg[,2]-avg[,1])
-      colnames(avg) <- c(paste(compare.group,"AVG",sep="_"),"deltaBeta")
-      DMP <- data.frame(DMP[com.idx,],avg,probe.features[com.idx,])
-      myDMP_timecourse[[s]] <- DMP 
-      message("[<<<<<< ChAMP.DMP VARIATION ENDED >>>>>>]")
-      message("[===========================]")
-      
-    }else{
-      
-      myDMP_timecourse[[s]] <- champ.DMP(beta = M, 
-                                         pheno=factor(design_timecourse[[s]]$group,levels=c("iPSC",s)), #levels argument necesary, otherwise comparisons will be determined by alphabetical order
-                                         arraytype = "EPIC"   ) # call function
-    }
-    
-  }
-  
   # calculate deltaBeta (MethDiff in Jaffe's paper - 2016) for all contrasts and probes (for future plots)
   avg <- data.frame(matrix(nrow = nrow(beta_diffcells),ncol = 0))
-  
-  for(s in stages[1:length(stages)]){
-    
-    #get average beta for all samples in each stage
-    if(is.null(dim(beta_diffcells[,grepl(s, colnames( beta_diffcells ))]))){ #for stages with just one sample
-      avg[paste(s,"AVG",sep="-") ] <-  beta_diffcells[,grepl(s,colnames(beta_diffcells))] # not really average, because there's just one value per CpG
+  if(sample_type=="diff"){
+    for(s in stages[1:length(stages)]){
       
-    }else{
-      avg[paste(s,"AVG",sep="-") ] <-  rowMeans(beta_diffcells[,grepl(s,colnames(beta_diffcells))])
-      
-    } 
-    if(s != "iPSC"){
-      
-      #if not iPSC stage, substract means to get deltaBeta for that second stage
-      avg <- cbind(avg,avg[,paste(s,"AVG",sep="-") ]-avg[,paste("iPSC","AVG",sep="-") ])
-      colnames(avg)[length(avg)] <- paste(s,"deltaBeta",sep="_")
+      #get average beta for all samples in each stage
+      if(is.null(dim(beta_diffcells[,grepl(s, colnames( beta_diffcells ))]))){ #for stages with just one sample
+        avg[paste(s,"AVG",sep="-") ] <-  beta_diffcells[,grepl(s,colnames(beta_diffcells))] # not really average, because there's just one value per CpG
+        
+      }else{
+        avg[paste(s,"AVG",sep="-") ] <-  rowMeans(beta_diffcells[,grepl(s,colnames(beta_diffcells))])
+        
+      } 
+      if(s != "iPSC"){
+        
+        #if not iPSC stage, substract means to get deltaBeta for that second stage
+        avg <- cbind(avg,avg[,paste(s,"AVG",sep="-") ]-avg[,paste("iPSC","AVG",sep="-") ])
+        colnames(avg)[length(avg)] <- paste(s,"deltaBeta",sep="_")
+      }
     }
   }
+  if(sample_type=="islets"){
+    for(s in c("iPSC","EN7","ISL|R") ){  # ISL and R samples as one ("islets")
+      
+      avg[paste(s,"AVG",sep="-") ] <-  rowMeans(beta_diffcells[,grepl(s,colnames(beta_diffcells))])
+      
+    }
+   
+    avg <- cbind(avg,avg[,2]-avg[,1]) # EN7 - iPSC
+    colnames(avg)[length(avg)] <- paste("EN7-iPSC","deltaBeta",sep="_")
+    avg <- cbind(avg,avg[,3]-avg[,1]) # islets - iPSC
+    colnames(avg)[length(avg)] <- paste("islets-iPSC","deltaBeta",sep="_")
+    avg <- cbind(avg,avg[,3]-avg[,2]) # islets - iPSC
+    colnames(avg)[length(avg)] <- paste("islets-EN7","deltaBeta",sep="_")
+    
+  }
+}
   
   rownames(avg) <- rownames(beta_diffcells) # add names of CpGs
   
+  if(sample_type=="diff"){
   write.csv(avg,"/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/deltaBeta_allprobes.csv", col.names=T,row.names=T, quote=F)
-  #save
+  }
+  if(sample_type=="islets"){
+    write.csv(avg,"/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/deltaBeta_allprobes_islets.csv", col.names=T,row.names=T, quote=F)
+  }
   
   
   
   # merge AVG and deltaBeta values with the results of diff meth probes using M values
-  
-  myDMP_timecourse_merged <- lapply(myDMP_timecourse, "[", c(1:6,10:19)) # subset dataframes without AVG or deltaBeta
-  myDMP_timecourse_beta_forplots=lapply(myDMP_timecourse_beta_forplots, "[", c(7:9))  # subset with AVG and deltaBeta
-  
-  
-  for(s in stages[2:length(stages)]){
+  if(diff_type=="timecourse"){ 
+    myDMP_timecourse <- lapply(myDMP_timecourse, "[", c(1:6,10:19)) # subset dataframes without AVG or deltaBeta
+    # myDMP_timecourse_beta_forplots=lapply(myDMP_timecourse_beta_forplots, "[", c(7:9))  # subset with AVG and deltaBeta
     
-    myDMP_timecourse_merged[[s]] <- cbind(myDMP_timecourse_merged[[s]], myDMP_timecourse_beta_forplots[[s]][row.names(myDMP_timecourse_merged[[s]]),]) #merge by probes from M value df
+    
+    if(sample_type=="diff"){
+      for(s in stages[2:length(stages)]){
+        write.csv(myDMP_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP/",s,"_timecourse_DMPs_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
+      }
+    }
+    if(sample_type=="islets"){
+      for(s in  names(group_timecourse)){
+        write.csv(myDMP_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP/",s,"_timecourse_DMPs_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
+      }
+    }
     
   }
-  
-  rm(myDMP_timecourse_beta_forplots,myDMP_timecourse)
-  
-  #save with all probes
-  for(s in stages[2:length(stages)]){
-    write.csv(myDMP_timecourse_merged[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP/",s,"_timecourse_DMPs_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
-  }
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-}
 ################ get max logFC o all stages for each CpG: that will be its maximum value ##################
 ###not sure if this is very relevant, as there is a threshold of methylation/not methylation
 
