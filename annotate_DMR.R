@@ -74,7 +74,6 @@ for(sample_type in types){
         DMR_timecourse[[s]]$gene_name=unstrsplit(symInDMR, sep=",") # add new column to my query data frame with genes
         write.csv(DMR_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMR/",s,"_timecourse_DMR_CpGs_within_900bp_genenames_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
         
-        
       }
     }
     
