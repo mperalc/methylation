@@ -79,4 +79,5 @@ for(sample_type in types){
     
     # WRITE FOR PEAK
   }
+}
   
