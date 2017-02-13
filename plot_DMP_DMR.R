@@ -18,7 +18,9 @@ library(biomaRt)
 
 ############### region to plot ##########
 
-region <- c(11, 2180000,2185000)  # Chr, position start, position finish
+region <- c( 10,114749000,114779600)  # Chr, position start, position finish
+
+
 
 #####################
 
@@ -26,7 +28,7 @@ currentDate <- Sys.Date() # to save date in name of output files
 diff_type="timecourse"   # type of differential analysis: peak or timecourse
 #sample_type="islets"   # islets or differentiated cells ("diff")
 stages=c("iPSC","DE","PGT","PFG","PE","EP","EN6","EN7")
-islets=c("EN7","islets","islets-EN7")
+islets=c("islets","islets-EN7")
 
 types=c("diff","islets") # to plot both
 
@@ -327,10 +329,17 @@ for(sample_type in types){
       
       message("---------------saving all plots------------------")
       
+      if(timecourse_stage=="DE"){ number=1}  # assign numbers so that plots are ordered in output
+      if(timecourse_stage=="PGT"){ number=2}
+      if(timecourse_stage=="PFG"){ number=3}
+      if(timecourse_stage=="PE"){ number=4}
+      if(timecourse_stage=="EP"){ number=5}
+      if(timecourse_stage=="EN6"){ number=6}
+      if(timecourse_stage=="EN7"){ number=7}
       
       ggsave(plot = p4,
              device="png",
-             filename = paste("/Users/Marta/Documents/WTCHG/DPhil/Plots/Methylation_EPIC/DMR_and_DMP_timecourse_iPSC_vs", timecourse_stage,
+             filename = paste("/Users/Marta/Documents/WTCHG/DPhil/Plots/Methylation_EPIC/",number,"DMR_and_DMP_timecourse_iPSC_vs", timecourse_stage,
                               paste(unique(results$external_gene_name), collapse = "_"),
                               paste(region, collapse = "_"),
                               currentDate,".png",sep="_"),
@@ -370,9 +379,6 @@ for(sample_type in types){
   }
   if(sample_type=="islets"){
     for(s in islets){
-      if(s=="EN7"){
-        x = c("iPSC",s) # two stages to contrast
-      }
       if(s=="islets"){
         x = c("iPSC","ISL","R") 
       }
@@ -615,10 +621,13 @@ for(sample_type in types){
       
       message("---------------saving all plots------------------")
       
+      if(s=="islets"){ number=8}  # assign numbers so that plots are ordered in output
+      if(s=="islets-EN7"){ number=9}
+   
       
       ggsave(plot = p4,
              device="png",
-             filename = paste("/Users/Marta/Documents/WTCHG/DPhil/Plots/Methylation_EPIC/DMR_and_DMP_timecourse_", paste(x, collapse = "-"),
+             filename = paste("/Users/Marta/Documents/WTCHG/DPhil/Plots/Methylation_EPIC/",number,"DMR_and_DMP_timecourse_", paste(x, collapse = "-"),
                               paste(unique(results$external_gene_name), collapse = "_"),
                               paste(region, collapse = "_"),
                               currentDate,".png",sep="_"),
