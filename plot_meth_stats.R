@@ -176,6 +176,105 @@ p3 <- ggplot(as.data.frame(plot_genomic_annotation), aes(x=variable,y=value,fill
 ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/methylated_B_over0.6_probes_by_genomic_annotation",currentDate,".jpg",sep=""),p3,width=5,height=4,units="in",dpi=300)
 
 
+###########################
+
+# same for beta-value <0.4
+
+# for each CpG island annotation
+
+island_annotation=as.data.frame(matrix(nrow = 4,ncol=ncol(beta)))
+colnames(island_annotation)=colnames(beta)
+rownames(island_annotation)=unique(probe.features$cgi)
+
+
+for(c in colnames(beta)){   # in % of total
+  
+  island_annotation[1,c]=(sum((0.4>beta_complete[,c]) & beta_complete$cgi=="shore") /sum(0.4>beta_complete[,c])) * 100
+  island_annotation[2,c]=(sum((0.4>beta_complete[,c]) & beta_complete$cgi=="opensea") /sum(0.4>beta_complete[,c])) * 100
+  island_annotation[3,c]=(sum((0.4>beta_complete[,c]) & beta_complete$cgi=="island") /sum(0.4>beta_complete[,c])) * 100
+  island_annotation[4,c]=(sum((0.4>beta_complete[,c]) & beta_complete$cgi=="shelf") /sum(0.4>beta_complete[,c])) * 100
+  
+}
+
+island_annotation=cbind(rownames(island_annotation),island_annotation)
+colnames(island_annotation)[1]="island_annotation"
+
+
+
+plot_island_annotation=melt(data = island_annotation)
+plot_island_annotation$island_annotation=factor(plot_island_annotation$island_annotation,levels = c("opensea", "shelf", "shore", "island" ))
+
+
+p2 <- ggplot(as.data.frame(plot_island_annotation), aes(x=variable,y=value,fill=island_annotation)) + geom_bar(stat="identity") +
+  ggtitle("Un-methylated (B<0.4) probes by CpG island annotation") +
+  ylab ("% of probes") +
+  theme_bw()+
+  theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
+        axis.text.y=element_text(size=8,face="bold"),axis.text.x=element_text(size=7,face="bold",angle = 90, hjust = 1,vjust = 0.5),
+        panel.border=element_blank(),plot.title = element_text(size=9,face="bold"),
+        axis.title.y=element_text(size=8,face="bold"),axis.title.x=element_blank(),
+        legend.text = element_text(size=7,face="bold"),legend.title = element_blank(),
+        legend.position = "bottom",legend.direction = "horizontal") 
+
+
+ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/methylated_B_under0_4_probes_by_CpG_island_annotation",currentDate,".jpg",sep=""),p2,width=4,height=4,units="in",dpi=300)
+
+
+
+# for each genomic annotation
+
+genomic_annotation=as.data.frame(matrix(nrow = 8,ncol=ncol(beta)))
+colnames(genomic_annotation)=colnames(beta)
+rownames(genomic_annotation)=unique(probe.features$feature)
+
+
+for(c in colnames(beta)){ # in %
+  
+  genomic_annotation[1,c]=(sum((0.4>beta_complete[,c]) & beta_complete$feature=="TSS1500")/sum(0.4>beta_complete[,c])) * 100
+  genomic_annotation[2,c]=(sum((0.4>beta_complete[,c]) & beta_complete$feature=="IGR")  /sum(0.4>beta_complete[,c])) * 100
+  genomic_annotation[3,c]=(sum((0.4>beta_complete[,c]) & beta_complete$feature=="Body") /sum(0.4>beta_complete[,c])) * 100
+  genomic_annotation[4,c]=(sum((0.4>beta_complete[,c]) & beta_complete$feature=="3'UTR") /sum(0.4>beta_complete[,c])) * 100
+  genomic_annotation[5,c]=(sum((0.4>beta_complete[,c]) & beta_complete$feature=="1stExon") /sum(0.4>beta_complete[,c])) * 100
+  genomic_annotation[6,c]=(sum((0.4>beta_complete[,c]) & beta_complete$feature=="TSS200") /sum(0.4>beta_complete[,c])) * 100
+  genomic_annotation[7,c]=(sum((0.4>beta_complete[,c]) & beta_complete$feature=="5'UTR") /sum(0.4>beta_complete[,c])) * 100
+  genomic_annotation[8,c]=(sum((0.4>beta_complete[,c]) & beta_complete$feature=="ExonBnd") /sum(0.4>beta_complete[,c])) * 100
+}
+
+
+genomic_annotation=cbind(rownames( genomic_annotation), genomic_annotation)
+colnames(genomic_annotation)[1]="genomic_annotation"
+
+
+
+plot_genomic_annotation=melt(data = genomic_annotation)
+plot_genomic_annotation$genomic_annotation=factor(plot_genomic_annotation$genomic_annotation,
+                                                  levels = c("IGR", "TSS1500", "TSS200", "3'UTR","Body","1stExon","ExonBnd","5'UTR" ))
+
+
+
+
+p3 <- ggplot(as.data.frame(plot_genomic_annotation), aes(x=variable,y=value,fill=genomic_annotation)) + geom_bar(stat="identity") +
+  ggtitle("Un-methylated (B<0.4) probes by genomic annotation") +
+  ylab ("% of probes") +
+  theme_bw()+
+  theme(panel.grid.minor = element_blank(), panel.grid.major = element_blank(), 
+        axis.text.y=element_text(size=8,face="bold"),axis.text.x=element_text(size=7,face="bold",angle = 90, hjust = 1,vjust = 0.5),
+        panel.border=element_blank(),plot.title = element_text(size=9,face="bold"),
+        axis.title.y=element_text(size=8,face="bold"),axis.title.x=element_blank(),
+        legend.text = element_text(size=7,face="bold"),legend.title = element_blank(),
+        legend.position = "bottom",legend.direction = "horizontal") 
+
+
+ggsave(filename=paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/methylated_B_under_0_4_probes_by_genomic_annotation",currentDate,".jpg",sep=""),p3,width=5,height=4,units="in",dpi=300)
+
+
+
+
+
+###########################3
+
+
+
 # DMR and DMP info for all stages
 
 DMR_timecourse <- list()
