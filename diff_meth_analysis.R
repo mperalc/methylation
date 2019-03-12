@@ -243,7 +243,7 @@ islets=colnames(beta)[22:32]  # islets names
                                            arraytype = "EPIC") # call function
       }
       for(s in names(group_timecourse)){
-        write.csv(myDMR_timecourse[[s]],paste(outFile,"DMR/",s,"_timecourse_DMR_CpGs_within_900bp_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
+        write.csv(myDMR_timecourse[[s]],paste(outFolder,"DMR/",s,"_timecourse_DMR_CpGs_within_900bp_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
       }
     }
   } 
@@ -412,9 +412,6 @@ islets=colnames(beta)[22:32]  # islets names
   }
   
   
-  ################ now with M values
-  
-  
   # calculate deltaBeta (MethDiff in Jaffe's paper - 2016) for all contrasts and probes (for future plots)
   avg <- data.frame(matrix(nrow = nrow(beta_diffcells),ncol = 0))
   if(sample_type=="diff"){
@@ -455,15 +452,14 @@ islets=colnames(beta)[22:32]  # islets names
 
 
   if(sample_type=="diff"){
-  write.csv(avg,"/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/deltaBeta_allprobes.csv", col.names=T,row.names=T, quote=F)
+  write.csv(avg,paste(outFolder,"deltaBeta_allprobes.csv"), col.names=T,row.names=T, quote=F)
   }
   if(sample_type=="islets"){
-    write.csv(avg,"/Users/Marta/Documents/WTCHG/DPhil/Data/Regulation/Methylation/deltaBeta_allprobes_islets.csv", col.names=T,row.names=T, quote=F)
+    write.csv(avg,paste(outFolder,"deltaBeta_allprobes_islets.csv"), col.names=T,row.names=T, quote=F)
   }
   
   
-  
-  # merge AVG and deltaBeta values with the results of diff meth probes using M values
+  # Save DMPs per contrast
   if(diff_type=="timecourse"){ 
     myDMP_timecourse <- lapply(myDMP_timecourse, "[", c(1:6,10:19)) # subset dataframes without AVG or deltaBeta
     # myDMP_timecourse_beta_forplots=lapply(myDMP_timecourse_beta_forplots, "[", c(7:9))  # subset with AVG and deltaBeta
@@ -471,12 +467,12 @@ islets=colnames(beta)[22:32]  # islets names
     
     if(sample_type=="diff"){
       for(s in stages[2:length(stages)]){
-        write.csv(myDMP_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP/",s,"_timecourse_DMPs_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
+        write.csv(myDMP_timecourse[[s]],paste(outFolder,"DMP/",s,"_timecourse_DMPs_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
       }
     }
     if(sample_type=="islets"){
       for(s in  names(group_timecourse)){
-        write.csv(myDMP_timecourse[[s]],paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/DMP/",s,"_timecourse_DMPs_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
+        write.csv(myDMP_timecourse[[s]],paste(outFolder,"DMP/",s,"_timecourse_DMPs_",currentDate,".csv",sep=""), col.names=T,row.names=T, quote=F)
       }
     }
     
