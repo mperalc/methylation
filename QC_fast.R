@@ -7,6 +7,7 @@ library(ENmix)
 library(GEOquery)
 library(wateRmelon) # for BMIQ normalization
 library(preprocessCore)  # different normalization functions
+library(IlluminaHumanMethylationEPICmanifest)
 
 currentDate <- Sys.Date() # to save date in name of output files
 
@@ -40,7 +41,8 @@ pD=cbind(pD,stage,sample)
 pD$Sample_Name=gsub( "^.*?_", "", pD$Sample_Name) # take out stage part of experiment id
 rownames(pD) <- pD$Sample_Name # add that as rownames
 rgSet <- rgSet[,pD$Sample_Name] # reordering before merging
-pData(rgSet) <- pD  # merging into pheno data of rgSet
+#pData(rgSet) <- pD  # merging into pheno data of rgSet
+pData(rgSet) <- as(pD, "DataFrame") # merging into pheno data of rgSet
 rgSet
 
 # give more descriptive names to our samples:
@@ -176,7 +178,7 @@ discard=unique(c(discard,discard2)) # 62935
 
 ############################################ normalization
 
-# QN function 
+# QN function (Matthias')
 
 ##get detection p-values:
 
@@ -209,14 +211,15 @@ rownames(TypeI.Red.U) <- TypeI.Red.Name
 colnames(TypeI.Red.U) <- sampleNames(rgSet)
 
 ##remove high missingness probes
-d = ifelse(dp<0.01,1,NA) # if p-value <0.1, make it 1. Else, make it NA.
+d = ifelse(dp<0.01,1,NA) # if p-value <0.01, make it 1. Else, make it NA.
 cr = data.frame(rowSums(is.na(d))/length(d[1,])) # sums NAs in each row, then divide by nº of samples.
-  # In the end, it excludes probes with p-values above 1 in a min of 1 sample. Why the formula, then?
+  # In the end, it excludes probes with p-values above 0.01 in a min of 1 sample. Why the formula, then?
 exclude.badcalls = rownames(cbind(cr,rownames(cr))[cbind(cr,rownames(cr))[,1]>0.02,])
 
 # test=names(as.matrix(cr)[which(as.matrix(cr)[,1]>0.02),])  # does the same as exclude.badcalls
 
 exclude.sites = unique(c(exclude.badcalls,discard))  #  4548 failed probes + previous ones = 65321
+# notice we're not discarding them yet
 
 ##exclude.sites = unique(rbind(as.matrix(exclude.chrX), as.matrix(exclude.chrY),as.matrix(exclude.cas),as.matrix(exclude.snps),as.matrix(crossmap),as.matrix(exclude.badcalls), as.matrix(exclude.mhc)))
 
@@ -239,13 +242,13 @@ TypeI.Red.U = subset(TypeI.Red.U, select=samples)
   # Everything stays the same.
 
 #set NAs -- this step is including NAs that shouldn't be there?????????
-d = subset(dp, select = samples) # no failed samples
-TypeII.Green = TypeII.Green * ifelse(d[rownames(TypeII.Green),]<=0.1,1,NA) # by multiplication, set probes and samples with high p-values to NA
-TypeII.Red = TypeII.Red * ifelse(d[rownames(TypeII.Red),]<=0.1,1,NA)
-TypeI.Green.M = TypeI.Green.M * ifelse(d[rownames(TypeI.Green.M),]<=0.1,1,NA)
-TypeI.Green.U = TypeI.Green.U * ifelse(d[rownames(TypeI.Green.U),]<=0.1,1,NA)
-TypeI.Red.M = TypeI.Red.M * ifelse(d[rownames(TypeI.Red.M),]<=0.1,1,NA)
-TypeI.Red.U = TypeI.Red.U * ifelse(d[rownames(TypeI.Red.U),]<=0.1,1,NA)
+# d = subset(dp, select = samples) # no failed samples
+# TypeII.Green = TypeII.Green * ifelse(d[rownames(TypeII.Green),]<=0.1,1,NA) # by multiplication, set probes and samples with high p-values to NA
+# TypeII.Red = TypeII.Red * ifelse(d[rownames(TypeII.Red),]<=0.1,1,NA)
+# TypeI.Green.M = TypeI.Green.M * ifelse(d[rownames(TypeI.Green.M),]<=0.1,1,NA)
+# TypeI.Green.U = TypeI.Green.U * ifelse(d[rownames(TypeI.Green.U),]<=0.1,1,NA)
+# TypeI.Red.M = TypeI.Red.M * ifelse(d[rownames(TypeI.Red.M),]<=0.1,1,NA)
+# TypeI.Red.U = TypeI.Red.U * ifelse(d[rownames(TypeI.Red.U),]<=0.1,1,NA)
 ##why this step?
 
 #--------------------------------------------------------------------------------------------------------------------------------
@@ -428,6 +431,16 @@ ggsave(paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/PCA_af
 
 p_nadults=plot_pca(m[,1:21],sample=sample[1:21],stage= stage[1:21] )
 ggsave(paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/PCA_after_filtering_and_QN_no_adult_islets",currentDate,".jpg",sep=""),p_nadults,width=8,height=8,units="in",dpi=300)
+
+# Test removing batch effects from SB3.1 outliers
+# batch <- c(rep("new",24),rep("old",12),rep("Xie",25))
+# 
+# batch_corrected = removeBatchEffect(m[,1:21],batch)
+# 
+# p_nadults_corrected=plot_pca(batch_corrected,sample=sample[1:21],stage= stage[1:21] )
+# ggsave(paste("/Users/Marta/Documents/WTCHG/DPhil/Data/Results/Methylation/PCA_after_filtering_and_QN_no_adult_islets_corrected",currentDate,".jpg",sep=""),p_nadults,width=8,height=8,units="in",dpi=300)
+# 
+
 
 # sample distance cluster
 
